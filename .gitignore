@@ -1,0 +1,28 @@
+# 依存関係
+node_modules/
+.pnp
+.pnp.js
+
+# ビルド成果物
+dist/
+dist-ssr/
+*.local
+
+# 環境変数（認証情報を含むため絶対にコミットしない）
+.env
+.env.local
+.env.*.local
+
+# エディタ
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
