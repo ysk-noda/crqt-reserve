@@ -10,6 +10,7 @@ CREATE TABLE bookings (
   start_time TEXT NOT NULL,  -- 例: "09:00"
   end_time TEXT NOT NULL,    -- 例: "10:30"
   name TEXT NOT NULL,
+  email TEXT,                -- メールアドレス（任意）
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -26,6 +27,9 @@ CREATE POLICY "allow_all_anon" ON bookings
   TO anon
   USING (true)
   WITH CHECK (true);
+
+-- メール検索用インデックス
+CREATE INDEX idx_bookings_email ON bookings (email);
 
 -- 確認用クエリ（実行後に予約データを確認できます）
 -- SELECT * FROM bookings ORDER BY created_at DESC LIMIT 10;

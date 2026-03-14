@@ -13,6 +13,7 @@ import FacilityTabs from '../components/FacilityTabs'
 import Calendar from '../components/Calendar'
 import TimeSlots from '../components/TimeSlots'
 import StepIndicator from '../components/StepIndicator'
+import MyReservations from '../components/MyReservations'
 
 export default function BookingPage() {
   // ステップ管理
@@ -26,33 +27,33 @@ export default function BookingPage() {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
-  const [monthBookings, setMonthBookings] = useState({}) // カレンダーの赤点用
-  const [dayBookings, setDayBookings] = useState([])     // 時間スロット用
+  const [monthBookings, setMonthBookings] = useState({})
+  const [dayBookings, setDayBookings] = useState([])
 
-  // ステップ2：名前入力
+  // ステップ2：名前・メール入力
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
   // ステップ3：完了
   const [bookingNumber, setBookingNumber] = useState('')
 
-  // キャンセルフォーム
+  // マイページモーダル
+  const [showMyPage, setShowMyPage] = useState(false)
+
+  // キャンセルフォーム（予約番号入力）
   const [showCancelForm, setShowCancelForm] = useState(false)
   const [cancelInput, setCancelInput] = useState('')
   const [cancelLoading, setCancelLoading] = useState(false)
-  const [cancelResult, setCancelResult] = useState(null) // 'success' | 'error' | null
+  const [cancelResult, setCancelResult] = useState(null)
 
-  // 月が変わったら or 施設が変わったらカレンダーの予約情報を再取得
   useEffect(() => {
     fetchMonthBookings()
   }, [selectedFacility.id, currentMonth])
 
-  // 日付が変わったら時間スロットの予約情報を再取得
   useEffect(() => {
-    if (selectedDate) {
-      fetchDayBookings()
-    }
+    if (selectedDate) fetchDayBookings()
   }, [selectedFacility.id, selectedDate])
 
   async function fetchMonthBookings() {
@@ -81,7 +82,6 @@ export default function BookingPage() {
       .select('start_time, end_time')
       .eq('facility_id', selectedFacility.id)
       .eq('date', selectedDate)
-
     setDayBookings(data || [])
   }
 
@@ -104,13 +104,10 @@ export default function BookingPage() {
   function handleSlotSelect(timeStr) {
     if (isSlotBooked(timeStr)) return
 
-    // 何も選択していない場合：最初の1スロットを選択
     if (selectedSlots.length === 0) {
       setSelectedSlots([timeStr])
       return
     }
-
-    // 唯一の選択スロットと同じ場合：選択解除
     if (selectedSlots.length === 1 && selectedSlots[0] === timeStr) {
       setSelectedSlots([])
       return
@@ -121,18 +118,10 @@ export default function BookingPage() {
     const from = Math.min(startIdx, clickIdx)
     const to = Math.max(startIdx, clickIdx)
 
-    // 最大4スロット（2時間）チェック
-    if (to - from + 1 > 4) {
-      setSelectedSlots([timeStr])
-      return
-    }
+    if (to - from + 1 > 4) { setSelectedSlots([timeStr]); return }
 
-    // 範囲内に予約済みスロットがないかチェック
     const range = TIME_SLOTS.slice(from, to + 1)
-    if (range.some((t) => isSlotBooked(t))) {
-      setSelectedSlots([timeStr])
-      return
-    }
+    if (range.some((t) => isSlotBooked(t))) { setSelectedSlots([timeStr]); return }
 
     setSelectedSlots(range)
   }
@@ -154,15 +143,33 @@ export default function BookingPage() {
       start_time: startTime,
       end_time: endTime,
       name: name.trim(),
+      email: email.trim() ? email.trim().toLowerCase() : null,
     })
 
-    setSubmitting(false)
-
     if (error) {
+      setSubmitting(false)
       setSubmitError('予約に失敗しました。時間を置いて再度お試しください。')
       return
     }
 
+    // 確認メール送信（失敗しても予約は完了扱い）
+    if (email.trim()) {
+      supabase.functions
+        .invoke('send-booking-email', {
+          body: {
+            email: email.trim().toLowerCase(),
+            name: name.trim(),
+            facilityName: selectedFacility.name,
+            date: formatDateJP(selectedDate),
+            timeRange: formatTimeRange(selectedSlots),
+            duration: selectedSlots.length * 30,
+            bookingNumber: num,
+          },
+        })
+        .catch((e) => console.error('Email send failed:', e))
+    }
+
+    setSubmitting(false)
     setBookingNumber(num)
     setStep(3)
   }
@@ -179,12 +186,7 @@ export default function BookingPage() {
       .select()
 
     setCancelLoading(false)
-
-    if (error || !data || data.length === 0) {
-      setCancelResult('error')
-    } else {
-      setCancelResult('success')
-    }
+    setCancelResult(error || !data || data.length === 0 ? 'error' : 'success')
   }
 
   function handleReset() {
@@ -192,6 +194,7 @@ export default function BookingPage() {
     setSelectedDate(null)
     setSelectedSlots([])
     setName('')
+    setEmail('')
     setBookingNumber('')
     setSubmitError(null)
     setCancelInput('')
@@ -206,9 +209,21 @@ export default function BookingPage() {
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-3">
-          <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
-          <p className="text-xs text-gray-500">コワーキングスペース</p>
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
+            <p className="text-xs text-gray-500">コワーキングスペース</p>
+          </div>
+          {/* 予約確認ボタン */}
+          <button
+            onClick={() => setShowMyPage(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-600 text-sm font-medium hover:bg-blue-100 active:bg-blue-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            予約確認
+          </button>
         </div>
       </header>
 
@@ -218,7 +233,6 @@ export default function BookingPage() {
         {/* ===== STEP 1: 施設・日時選択 ===== */}
         {step === 1 && (
           <div className="space-y-5 mt-4">
-            {/* 施設選択タブ */}
             <div>
               <h2 className="text-sm font-semibold text-gray-600 mb-2">① 施設を選ぶ</h2>
               <FacilityTabs
@@ -228,7 +242,6 @@ export default function BookingPage() {
               />
             </div>
 
-            {/* カレンダー */}
             <div>
               <h2 className="text-sm font-semibold text-gray-600 mb-2">② 日付を選ぶ</h2>
               <Calendar
@@ -240,15 +253,12 @@ export default function BookingPage() {
               />
             </div>
 
-            {/* 時間スロット（日付選択後に表示） */}
             {selectedDate && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-600 mb-1">③ 時間を選ぶ</h2>
                 <p className="text-xs text-gray-400 mb-2">
                   30分単位・最大2時間まで選択可（連続した時間帯のみ）
                 </p>
-
-                {/* 選択中の時間表示 */}
                 {selectedSlots.length > 0 && (
                   <div className="mb-3 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-100">
                     <p className="text-sm text-blue-700 font-semibold">
@@ -264,7 +274,6 @@ export default function BookingPage() {
                     </p>
                   </div>
                 )}
-
                 <TimeSlots
                   bookings={dayBookings}
                   selectedSlots={selectedSlots}
@@ -273,7 +282,6 @@ export default function BookingPage() {
               </div>
             )}
 
-            {/* 次へボタン */}
             <button
               disabled={!canProceedToStep2}
               onClick={() => setStep(2)}
@@ -289,7 +297,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* ===== STEP 2: 内容確認・名前入力 ===== */}
+        {/* ===== STEP 2: 内容確認・名前・メール入力 ===== */}
         {step === 2 && (
           <div className="space-y-4 mt-4">
             {/* 予約内容サマリー */}
@@ -313,19 +321,38 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {/* 名前入力 */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                お名前 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="山田 太郎"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                autoFocus
-              />
+            {/* 名前・メール入力 */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  お名前 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="山田 太郎"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  メールアドレス
+                  <span className="text-gray-400 font-normal text-xs ml-1">（任意）</span>
+                </label>
+                <p className="text-xs text-gray-400 mb-2">
+                  入力すると確認メールが届き、後から予約の確認・キャンセルができます
+                </p>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="example@email.com"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                />
+              </div>
             </div>
 
             {submitError && (
@@ -334,7 +361,6 @@ export default function BookingPage() {
               </p>
             )}
 
-            {/* ボタン */}
             <div className="flex gap-3">
               <button
                 onClick={() => setStep(1)}
@@ -362,7 +388,6 @@ export default function BookingPage() {
         {step === 3 && (
           <div className="space-y-4 mt-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              {/* チェックアイコン */}
               <div className="flex flex-col items-center mb-5">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-3">
                   <svg className="w-9 h-9 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -371,9 +396,13 @@ export default function BookingPage() {
                 </div>
                 <h2 className="text-xl font-bold text-gray-800">予約完了！</h2>
                 <p className="text-sm text-gray-500 mt-1">ご予約を承りました</p>
+                {email && (
+                  <p className="text-xs text-blue-500 mt-1">
+                    確認メールを {email} に送信しました
+                  </p>
+                )}
               </div>
 
-              {/* 予約番号 */}
               <div className="bg-gray-50 rounded-xl p-4 mb-4 text-center border border-gray-200">
                 <p className="text-xs text-gray-500 mb-1">予約番号</p>
                 <p className="text-2xl font-mono font-bold text-blue-600 tracking-widest">
@@ -384,13 +413,13 @@ export default function BookingPage() {
                 </p>
               </div>
 
-              {/* 予約内容 */}
               <div className="bg-blue-50 rounded-xl p-3 text-sm text-gray-700 space-y-1.5 border border-blue-100">
                 <p className="font-semibold text-blue-800 mb-1">予約内容</p>
                 <p>🏢 施設：{selectedFacility.name}</p>
                 <p>📅 日付：{formatDateJP(selectedDate)}</p>
                 <p>🕐 時間：{formatTimeRange(selectedSlots)}（{selectedSlots.length * 30}分）</p>
                 <p>👤 お名前：{name}</p>
+                {email && <p>✉ メール：{email}</p>}
               </div>
             </div>
 
@@ -403,7 +432,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* ===== キャンセルセクション ===== */}
+        {/* ===== 予約番号でキャンセル（フォールバック） ===== */}
         {step !== 3 && (
           <div className="mt-10 pt-6 border-t border-gray-200">
             {!showCancelForm ? (
@@ -415,14 +444,11 @@ export default function BookingPage() {
               </button>
             ) : (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700">予約のキャンセル</h3>
+                <h3 className="text-sm font-semibold text-gray-700">予約番号でキャンセル</h3>
                 <input
                   type="text"
                   value={cancelInput}
-                  onChange={(e) => {
-                    setCancelInput(e.target.value)
-                    setCancelResult(null)
-                  }}
+                  onChange={(e) => { setCancelInput(e.target.value); setCancelResult(null) }}
                   placeholder="予約番号を入力（例: CRQ-ABC123）"
                   className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 uppercase"
                 />
@@ -438,11 +464,7 @@ export default function BookingPage() {
                 )}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => {
-                      setShowCancelForm(false)
-                      setCancelInput('')
-                      setCancelResult(null)
-                    }}
+                    onClick={() => { setShowCancelForm(false); setCancelInput(''); setCancelResult(null) }}
                     className="flex-1 py-3 rounded-lg text-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
                   >
                     閉じる
@@ -453,7 +475,7 @@ export default function BookingPage() {
                     className={`
                       flex-1 py-3 rounded-lg text-sm font-semibold transition-colors
                       ${cancelInput.trim() && !cancelLoading && cancelResult !== 'success'
-                        ? 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700'
+                        ? 'bg-red-500 text-white hover:bg-red-600'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
                     `}
                   >
@@ -465,6 +487,9 @@ export default function BookingPage() {
           </div>
         )}
       </div>
+
+      {/* マイページモーダル */}
+      {showMyPage && <MyReservations onClose={() => setShowMyPage(false)} />}
     </div>
   )
 }
