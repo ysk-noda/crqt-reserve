@@ -75,7 +75,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <h1 className="text-xl font-bold text-gray-800">管理者ログイン</h1>
-            <p className="text-sm text-gray-500 mt-1">施設予約 管理画面</p>
+            <p className="text-sm text-gray-500 mt-1">三島クロケット 施設予約 管理画面</p>
           </div>
 
           <input
@@ -112,7 +112,7 @@ export default function AdminPage() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-gray-800">管理者画面</h1>
-            <p className="text-xs text-gray-500">コワーキングスペース 施設予約</p>
+            <p className="text-xs text-gray-500">三島クロケット 施設予約</p>
           </div>
           <div className="flex items-center gap-3">
             <a

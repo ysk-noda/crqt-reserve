@@ -124,7 +124,6 @@ export default function MyReservations({ onClose }) {
                           <p className="text-sm text-gray-600">
                             {b.start_time} 〜 {b.end_time}
                           </p>
-                          <p className="text-xs text-blue-500 font-mono">{b.booking_number}</p>
                         </div>
                         <button
                           onClick={() => handleCancel(b)}
@@ -146,12 +145,6 @@ export default function MyReservations({ onClose }) {
             </div>
           )}
 
-          {/* 予約番号でキャンセルするリンク */}
-          <div className="pt-2 border-t border-gray-100">
-            <p className="text-xs text-gray-400 text-center">
-              メール未入力で予約した場合は、下の「予約番号でキャンセル」をご利用ください
-            </p>
-          </div>
         </div>
       </div>
     </div>

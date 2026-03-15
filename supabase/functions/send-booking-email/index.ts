@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'onboarding@resend.dev'
+const BCC_EMAIL = 'info@crqt.work'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,14 +10,15 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // CORS プリフライト
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { email, name, facilityName, date, timeRange, duration, bookingNumber } =
+    const { email, name, facilityName, date, timeRange, duration, appUrl } =
       await req.json()
+
+    const cancelUrl = appUrl ?? 'https://crqt.work'
 
     const html = `
 <!DOCTYPE html>
@@ -27,6 +29,7 @@ serve(async (req) => {
     <!-- ヘッダー -->
     <div style="background: #2563eb; padding: 24px; text-align: center;">
       <h1 style="color: #fff; margin: 0; font-size: 20px; font-weight: 700;">予約完了のお知らせ</h1>
+      <p style="color: #bfdbfe; margin: 6px 0 0; font-size: 13px;">三島クロケット</p>
     </div>
 
     <!-- 本文 -->
@@ -54,11 +57,16 @@ serve(async (req) => {
         </table>
       </div>
 
-      <!-- 予約番号 -->
-      <div style="background: #eff6ff; border-radius: 8px; padding: 16px; text-align: center; border: 1px solid #bfdbfe; margin-bottom: 20px;">
-        <p style="margin: 0 0 6px; color: #6b7280; font-size: 12px;">予約番号</p>
-        <p style="margin: 0; font-size: 26px; font-weight: 700; color: #2563eb; font-family: 'Courier New', monospace; letter-spacing: 3px;">${bookingNumber}</p>
-        <p style="margin: 10px 0 0; color: #ef4444; font-size: 12px; font-weight: 600;">⚠ キャンセル時に必要です。大切に保管してください。</p>
+      <!-- キャンセル案内 -->
+      <div style="background: #fff7ed; border-radius: 8px; padding: 16px; margin-bottom: 20px; border: 1px solid #fed7aa; text-align: center;">
+        <p style="margin: 0 0 10px; color: #92400e; font-size: 13px;">予約内容の確認・キャンセルはこちら</p>
+        <a href="${cancelUrl}"
+          style="display: inline-block; background: #ea580c; color: #fff; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600;">
+          予約のキャンセルはこちらから
+        </a>
+        <p style="margin: 10px 0 0; color: #b45309; font-size: 11px;">
+          ページを開いてヘッダーの「予約確認」からメールアドレスで検索できます
+        </p>
       </div>
 
       <p style="color: #9ca3af; font-size: 12px; margin: 0;">
@@ -79,7 +87,8 @@ serve(async (req) => {
       body: JSON.stringify({
         from: FROM_EMAIL,
         to: email,
-        subject: `【予約完了】${facilityName}  ${bookingNumber}`,
+        bcc: [BCC_EMAIL],
+        subject: `【予約完了】${facilityName} ${date}`,
         html,
       }),
     })

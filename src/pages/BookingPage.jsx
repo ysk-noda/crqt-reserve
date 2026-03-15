@@ -7,7 +7,6 @@ import {
   formatDateJP,
   getEndTime,
   formatTimeRange,
-  generateBookingNumber,
 } from '../lib/utils'
 import FacilityTabs from '../components/FacilityTabs'
 import Calendar from '../components/Calendar'
@@ -16,10 +15,9 @@ import StepIndicator from '../components/StepIndicator'
 import MyReservations from '../components/MyReservations'
 
 export default function BookingPage() {
-  // ステップ管理
   const [step, setStep] = useState(1)
 
-  // ステップ1：施設・日時選択
+  // ステップ1
   const [selectedFacility, setSelectedFacility] = useState(FACILITIES[0])
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedSlots, setSelectedSlots] = useState([])
@@ -30,23 +28,14 @@ export default function BookingPage() {
   const [monthBookings, setMonthBookings] = useState({})
   const [dayBookings, setDayBookings] = useState([])
 
-  // ステップ2：名前・メール入力
+  // ステップ2
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
-  // ステップ3：完了
-  const [bookingNumber, setBookingNumber] = useState('')
-
   // マイページモーダル
   const [showMyPage, setShowMyPage] = useState(false)
-
-  // キャンセルフォーム（予約番号入力）
-  const [showCancelForm, setShowCancelForm] = useState(false)
-  const [cancelInput, setCancelInput] = useState('')
-  const [cancelLoading, setCancelLoading] = useState(false)
-  const [cancelResult, setCancelResult] = useState(null)
 
   useEffect(() => {
     fetchMonthBookings()
@@ -104,14 +93,8 @@ export default function BookingPage() {
   function handleSlotSelect(timeStr) {
     if (isSlotBooked(timeStr)) return
 
-    if (selectedSlots.length === 0) {
-      setSelectedSlots([timeStr])
-      return
-    }
-    if (selectedSlots.length === 1 && selectedSlots[0] === timeStr) {
-      setSelectedSlots([])
-      return
-    }
+    if (selectedSlots.length === 0) { setSelectedSlots([timeStr]); return }
+    if (selectedSlots.length === 1 && selectedSlots[0] === timeStr) { setSelectedSlots([]); return }
 
     const startIdx = TIME_SLOTS.indexOf(selectedSlots[0])
     const clickIdx = TIME_SLOTS.indexOf(timeStr)
@@ -133,10 +116,9 @@ export default function BookingPage() {
 
     const startTime = selectedSlots[0]
     const endTime = getEndTime(selectedSlots)
-    const num = generateBookingNumber()
 
     const { error } = await supabase.from('bookings').insert({
-      booking_number: num,
+      booking_number: crypto.randomUUID(), // DB の UNIQUE NOT NULL 制約を満たすため内部生成（表示しない）
       facility_id: selectedFacility.id,
       facility_name: selectedFacility.name,
       date: selectedDate,
@@ -163,30 +145,14 @@ export default function BookingPage() {
             date: formatDateJP(selectedDate),
             timeRange: formatTimeRange(selectedSlots),
             duration: selectedSlots.length * 30,
-            bookingNumber: num,
+            appUrl: window.location.origin,
           },
         })
         .catch((e) => console.error('Email send failed:', e))
     }
 
     setSubmitting(false)
-    setBookingNumber(num)
     setStep(3)
-  }
-
-  async function handleCancel() {
-    if (!cancelInput.trim()) return
-    setCancelLoading(true)
-    setCancelResult(null)
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .delete()
-      .eq('booking_number', cancelInput.trim().toUpperCase())
-      .select()
-
-    setCancelLoading(false)
-    setCancelResult(error || !data || data.length === 0 ? 'error' : 'success')
   }
 
   function handleReset() {
@@ -195,11 +161,7 @@ export default function BookingPage() {
     setSelectedSlots([])
     setName('')
     setEmail('')
-    setBookingNumber('')
     setSubmitError(null)
-    setCancelInput('')
-    setCancelResult(null)
-    setShowCancelForm(false)
     fetchMonthBookings()
   }
 
@@ -212,9 +174,8 @@ export default function BookingPage() {
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
-            <p className="text-xs text-gray-500">コワーキングスペース</p>
+            <p className="text-xs text-gray-500">三島クロケット</p>
           </div>
-          {/* 予約確認ボタン */}
           <button
             onClick={() => setShowMyPage(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-600 text-sm font-medium hover:bg-blue-100 active:bg-blue-200 transition-colors"
@@ -230,16 +191,12 @@ export default function BookingPage() {
       <div className="max-w-lg mx-auto px-4 py-4 pb-24">
         <StepIndicator currentStep={step} />
 
-        {/* ===== STEP 1: 施設・日時選択 ===== */}
+        {/* ===== STEP 1 ===== */}
         {step === 1 && (
           <div className="space-y-5 mt-4">
             <div>
               <h2 className="text-sm font-semibold text-gray-600 mb-2">① 施設を選ぶ</h2>
-              <FacilityTabs
-                facilities={FACILITIES}
-                selected={selectedFacility}
-                onChange={handleFacilityChange}
-              />
+              <FacilityTabs facilities={FACILITIES} selected={selectedFacility} onChange={handleFacilityChange} />
             </div>
 
             <div>
@@ -256,54 +213,41 @@ export default function BookingPage() {
             {selectedDate && (
               <div>
                 <h2 className="text-sm font-semibold text-gray-600 mb-1">③ 時間を選ぶ</h2>
-                <p className="text-xs text-gray-400 mb-2">
-                  30分単位・最大2時間まで選択可（連続した時間帯のみ）
-                </p>
+                <p className="text-xs text-gray-400 mb-2">30分単位・最大2時間まで（連続した時間帯のみ）</p>
                 {selectedSlots.length > 0 && (
                   <div className="mb-3 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-100">
                     <p className="text-sm text-blue-700 font-semibold">
                       選択中: {formatTimeRange(selectedSlots)}
-                      <span className="text-blue-500 font-normal ml-2">
-                        （{selectedSlots.length * 30}分）
-                      </span>
+                      <span className="text-blue-500 font-normal ml-2">（{selectedSlots.length * 30}分）</span>
                     </p>
                     <p className="text-xs text-blue-400 mt-0.5">
-                      {selectedSlots.length < 4
-                        ? '別の時間をクリックして延長できます'
-                        : '最大2時間に達しました'}
+                      {selectedSlots.length < 4 ? '別の時間をクリックして延長できます' : '最大2時間に達しました'}
                     </p>
                   </div>
                 )}
-                <TimeSlots
-                  bookings={dayBookings}
-                  selectedSlots={selectedSlots}
-                  onSlotSelect={handleSlotSelect}
-                />
+                <TimeSlots bookings={dayBookings} selectedSlots={selectedSlots} onSlotSelect={handleSlotSelect} />
               </div>
             )}
 
             <button
               disabled={!canProceedToStep2}
               onClick={() => setStep(2)}
-              className={`
-                w-full py-4 rounded-xl font-semibold text-base transition-colors
+              className={`w-full py-4 rounded-xl font-semibold text-base transition-colors
                 ${canProceedToStep2
                   ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
-              `}
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
             >
               次へ（内容確認）
             </button>
           </div>
         )}
 
-        {/* ===== STEP 2: 内容確認・名前・メール入力 ===== */}
+        {/* ===== STEP 2 ===== */}
         {step === 2 && (
           <div className="space-y-4 mt-4">
-            {/* 予約内容サマリー */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <h2 className="text-base font-semibold text-gray-800 mb-3">予約内容の確認</h2>
-              <div className="space-y-0">
+              <div>
                 <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
                   <span className="text-sm text-gray-500">施設</span>
                   <span className="text-sm font-semibold text-gray-800">{selectedFacility.name}</span>
@@ -321,7 +265,6 @@ export default function BookingPage() {
               </div>
             </div>
 
-            {/* 名前・メール入力 */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -332,11 +275,10 @@ export default function BookingPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="山田 太郎"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                   autoFocus
                 />
               </div>
-
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">
                   メールアドレス
@@ -350,33 +292,29 @@ export default function BookingPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="example@email.com"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
               </div>
             </div>
 
             {submitError && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100">
-                {submitError}
-              </p>
+              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-100">{submitError}</p>
             )}
 
             <div className="flex gap-3">
               <button
                 onClick={() => setStep(1)}
-                className="w-1/3 py-4 rounded-xl font-semibold text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 active:bg-gray-100"
+                className="w-1/3 py-4 rounded-xl font-semibold text-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
               >
                 戻る
               </button>
               <button
                 disabled={!name.trim() || submitting}
                 onClick={handleConfirm}
-                className={`
-                  w-2/3 py-4 rounded-xl font-semibold text-base transition-colors
+                className={`w-2/3 py-4 rounded-xl font-semibold text-base transition-colors
                   ${name.trim() && !submitting
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
-                `}
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
               >
                 {submitting ? '予約中...' : '予約を確定する'}
               </button>
@@ -384,7 +322,7 @@ export default function BookingPage() {
           </div>
         )}
 
-        {/* ===== STEP 3: 予約完了 ===== */}
+        {/* ===== STEP 3 ===== */}
         {step === 3 && (
           <div className="space-y-4 mt-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -397,20 +335,8 @@ export default function BookingPage() {
                 <h2 className="text-xl font-bold text-gray-800">予約完了！</h2>
                 <p className="text-sm text-gray-500 mt-1">ご予約を承りました</p>
                 {email && (
-                  <p className="text-xs text-blue-500 mt-1">
-                    確認メールを {email} に送信しました
-                  </p>
+                  <p className="text-xs text-blue-500 mt-1">確認メールを {email} に送信しました</p>
                 )}
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4 mb-4 text-center border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">予約番号</p>
-                <p className="text-2xl font-mono font-bold text-blue-600 tracking-widest">
-                  {bookingNumber}
-                </p>
-                <p className="text-xs text-red-500 mt-2 font-medium">
-                  ⚠ キャンセル時に必要です。必ずメモしてください。
-                </p>
               </div>
 
               <div className="bg-blue-50 rounded-xl p-3 text-sm text-gray-700 space-y-1.5 border border-blue-100">
@@ -425,70 +351,14 @@ export default function BookingPage() {
 
             <button
               onClick={handleReset}
-              className="w-full py-4 rounded-xl font-semibold text-base bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm"
+              className="w-full py-4 rounded-xl font-semibold text-base bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
             >
               続けて予約する
             </button>
           </div>
         )}
-
-        {/* ===== 予約番号でキャンセル（フォールバック） ===== */}
-        {step !== 3 && (
-          <div className="mt-10 pt-6 border-t border-gray-200">
-            {!showCancelForm ? (
-              <button
-                onClick={() => setShowCancelForm(true)}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 underline"
-              >
-                予約番号でキャンセルする
-              </button>
-            ) : (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700">予約番号でキャンセル</h3>
-                <input
-                  type="text"
-                  value={cancelInput}
-                  onChange={(e) => { setCancelInput(e.target.value); setCancelResult(null) }}
-                  placeholder="予約番号を入力（例: CRQ-ABC123）"
-                  className="w-full px-3 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 uppercase"
-                />
-                {cancelResult === 'success' && (
-                  <p className="text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2 border border-green-200">
-                    ✅ キャンセルが完了しました。
-                  </p>
-                )}
-                {cancelResult === 'error' && (
-                  <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
-                    ❌ 予約番号が見つかりません。再度ご確認ください。
-                  </p>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setShowCancelForm(false); setCancelInput(''); setCancelResult(null) }}
-                    className="flex-1 py-3 rounded-lg text-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
-                  >
-                    閉じる
-                  </button>
-                  <button
-                    disabled={!cancelInput.trim() || cancelLoading || cancelResult === 'success'}
-                    onClick={handleCancel}
-                    className={`
-                      flex-1 py-3 rounded-lg text-sm font-semibold transition-colors
-                      ${cancelInput.trim() && !cancelLoading && cancelResult !== 'success'
-                        ? 'bg-red-500 text-white hover:bg-red-600'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
-                    `}
-                  >
-                    {cancelLoading ? '処理中...' : 'キャンセルする'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* マイページモーダル */}
       {showMyPage && <MyReservations onClose={() => setShowMyPage(false)} />}
     </div>
   )

@@ -13,16 +13,6 @@ export const TIME_SLOTS = Array.from({ length: 48 }, (_, i) => {
   return `${h}:${m}`
 })
 
-// ランダムな予約番号を生成（例: CRQ-AB3X7Z）
-export function generateBookingNumber() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-  let result = 'CRQ-'
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length))
-  }
-  return result
-}
-
 // Date オブジェクト → "YYYY-MM-DD"
 export function formatDate(date) {
   const y = date.getFullYear()
