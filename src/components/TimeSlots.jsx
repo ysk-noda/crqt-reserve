@@ -19,10 +19,12 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotSelect }) {
     if (!hourMap[h]) hourMap[h] = []
     hourMap[h].push(slot)
   })
-  const hours = Object.entries(hourMap).map(([h, slots]) => ({
-    label: `${h}時`,
-    slots,
-  }))
+  const hours = Object.entries(hourMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([h, slots]) => ({
+      label: `${h}時`,
+      slots,
+    }))
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
