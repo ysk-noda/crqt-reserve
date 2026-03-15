@@ -135,20 +135,33 @@ export default function BookingPage() {
     }
 
     // 確認メール送信（失敗しても予約は完了扱い）
+    // supabase.functions.invoke は UTF-8 バイトを壊すため、fetch 直接 + Unicode エスケープで送信
     if (email.trim()) {
-      supabase.functions
-        .invoke('send-booking-email', {
-          body: {
-            email: email.trim().toLowerCase(),
-            name: name.trim(),
-            facilityName: selectedFacility.name,
-            date: formatDateJP(selectedDate),
-            timeRange: formatTimeRange(selectedSlots),
-            duration: selectedSlots.length * 30,
-            appUrl: window.location.origin,
+      const payload = {
+        email: email.trim().toLowerCase(),
+        name: name.trim(),
+        facilityName: selectedFacility.name,
+        date: formatDateJP(selectedDate),
+        timeRange: formatTimeRange(selectedSlots),
+        duration: selectedSlots.length * 30,
+        appUrl: window.location.origin,
+      }
+      // 非ASCII文字を \uXXXX 形式にエスケープして Supabase インフラの文字化けを防ぐ
+      const safeBody = JSON.stringify(payload).replace(
+        /[\u007F-\uFFFF]/g,
+        (chr) => '\\u' + ('0000' + chr.charCodeAt(0).toString(16)).slice(-4)
+      )
+      fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-booking-email`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
-        })
-        .catch((e) => console.error('Email send failed:', e))
+          body: safeBody,
+        }
+      ).catch((e) => console.error('Email send failed:', e))
     }
 
     setSubmitting(false)
