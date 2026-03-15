@@ -1,5 +1,7 @@
 // 時間スロット選択コンポーネント
-// 00:00〜23:30 を時間ごとにグループ化して表示
+// utils.js の TIME_SLOTS（09:00〜17:30）を時間ごとにグループ化して表示
+
+import { TIME_SLOTS } from '../lib/utils'
 
 export default function TimeSlots({ bookings, selectedSlots, onSlotSelect }) {
   function isBooked(timeStr) {
@@ -10,14 +12,17 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotSelect }) {
     return selectedSlots.includes(timeStr)
   }
 
-  // 24時間 × {00, 30} の構造
-  const hours = Array.from({ length: 24 }, (_, h) => {
-    const hStr = String(h).padStart(2, '0')
-    return {
-      label: `${hStr}:00`,
-      slots: [`${hStr}:00`, `${hStr}:30`],
-    }
+  // TIME_SLOTS を時間単位にグループ化（09時〜17時）
+  const hourMap = {}
+  TIME_SLOTS.forEach((slot) => {
+    const h = slot.split(':')[0]
+    if (!hourMap[h]) hourMap[h] = []
+    hourMap[h].push(slot)
   })
+  const hours = Object.entries(hourMap).map(([h, slots]) => ({
+    label: `${h}時`,
+    slots,
+  }))
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -26,9 +31,9 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotSelect }) {
           <div key={label} className="flex border-b border-gray-100 last:border-0">
             {/* 時刻ラベル */}
             <div className="w-12 flex-shrink-0 flex items-center justify-center text-xs text-gray-400 bg-gray-50 border-r border-gray-100">
-              {label.split(':')[0]}時
+              {label}
             </div>
-            {/* 2スロット */}
+            {/* スロット */}
             <div className="flex flex-1">
               {slots.map((slot) => {
                 const booked = isBooked(slot)
