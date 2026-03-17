@@ -35,3 +35,9 @@ enable_signup = true
 
 [functions.send-booking-email]
 verify_jwt = false
+
+[functions.notify-ending-soon]
+verify_jwt = false
+
+[functions.extend-booking]
+verify_jwt = false

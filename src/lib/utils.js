@@ -1,9 +1,9 @@
 export const FACILITIES = [
-  { id: 'meeting1', name: '会議室①' },
-  { id: 'meeting2', name: '会議室②' },
-  { id: 'phoneboxA', name: 'フォンボックスA' },
-  { id: 'phoneboxB', name: 'フォンボックスB' },
-  { id: 'phoneboxC', name: 'フォンボックスC' },
+  { id: 'meeting1', name: '会議室（地下）' },
+  { id: 'meeting2', name: '会議室（2階）' },
+  { id: 'phoneboxA', name: 'フォンボックス（入口）' },
+  { id: 'phoneboxB', name: 'フォンボックス（地下・手前）' },
+  { id: 'phoneboxC', name: 'フォンボックス（地下・奥）' },
 ]
 
 // 09:00 〜 17:30 の30分単位スロット（18個、最終枠の終了は18:00）
