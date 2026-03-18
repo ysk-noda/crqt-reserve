@@ -23,7 +23,7 @@ SELECT cron.schedule(
   '* * * * *',
   $$
   SELECT net.http_post(
-    url        := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/notify-ending-soon',
+    url        := 'https://jldhnoohjtwhzavjqgub.supabase.co/functions/v1/notify-ending-soon',
     headers    := '{"Content-Type": "application/json"}'::jsonb,
     body       := '{}'::jsonb,
     timeout_milliseconds := 10000

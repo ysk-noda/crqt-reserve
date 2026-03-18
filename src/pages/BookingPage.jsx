@@ -20,7 +20,8 @@ export default function BookingPage() {
   // ステップ1
   const [selectedFacility, setSelectedFacility] = useState(FACILITIES[0])
   const [selectedDate, setSelectedDate] = useState(null)
-  const [selectedSlots, setSelectedSlots] = useState([])
+  const [selectedSlots, setSelectedSlots] = useState([]) // 確定した選択範囲
+  const [pendingStart, setPendingStart] = useState(null)  // 1クリック目の開始時間（待機中）
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -78,35 +79,73 @@ export default function BookingPage() {
     setSelectedFacility(facility)
     setSelectedDate(null)
     setSelectedSlots([])
+    setPendingStart(null)
     setDayBookings([])
   }
 
   function handleDateSelect(dateStr) {
     setSelectedDate(dateStr)
     setSelectedSlots([])
+    setPendingStart(null)
   }
 
   function isSlotBooked(timeStr) {
     return dayBookings.some((b) => timeStr >= b.start_time && timeStr < b.end_time)
   }
 
-  function handleSlotSelect(timeStr) {
-    if (isSlotBooked(timeStr)) return
+  // 2クリック方式: 1クリック目=開始時間、2クリック目=終了時間
+  function handleSlotClick(timeStr) {
+    const isEnd18 = timeStr === '18:00'
 
-    if (selectedSlots.length === 0) { setSelectedSlots([timeStr]); return }
-    if (selectedSlots.length === 1 && selectedSlots[0] === timeStr) { setSelectedSlots([]); return }
+    if (!isEnd18 && isSlotBooked(timeStr)) return
 
-    const startIdx = TIME_SLOTS.indexOf(selectedSlots[0])
-    const clickIdx = TIME_SLOTS.indexOf(timeStr)
-    const from = Math.min(startIdx, clickIdx)
-    const to = Math.max(startIdx, clickIdx)
+    if (!pendingStart) {
+      // 1クリック目: 開始時間を設定
+      if (isEnd18) return
+      setPendingStart(timeStr)
+      setSelectedSlots([])
+      return
+    }
 
-    if (to - from + 1 > 4) { setSelectedSlots([timeStr]); return }
+    // pendingStart が設定済み
+    if (!isEnd18 && timeStr === pendingStart) {
+      // 同じ時間: キャンセル
+      setPendingStart(null)
+      setSelectedSlots([])
+      return
+    }
 
-    const range = TIME_SLOTS.slice(from, to + 1)
-    if (range.some((t) => isSlotBooked(t))) { setSelectedSlots([timeStr]); return }
+    if (!isEnd18 && timeStr < pendingStart) {
+      // 開始より前: 新しい開始として設定
+      setPendingStart(timeStr)
+      setSelectedSlots([])
+      return
+    }
 
+    // timeStr > pendingStart (または '18:00') → 終了時間境界として確定
+    const range = TIME_SLOTS.filter((s) => s >= pendingStart && s < timeStr)
+
+    if (range.length === 0 || range.length > 4) {
+      // 無効（0スロットまたは2時間超）
+      if (!isEnd18) {
+        setPendingStart(timeStr)
+        setSelectedSlots([])
+      }
+      return
+    }
+
+    if (range.some((s) => isSlotBooked(s))) {
+      // 範囲内に予約済みスロットあり
+      if (!isEnd18) {
+        setPendingStart(timeStr)
+        setSelectedSlots([])
+      }
+      return
+    }
+
+    // 有効な範囲 → 確定
     setSelectedSlots(range)
+    setPendingStart(null)
   }
 
   async function handleConfirm() {
@@ -118,7 +157,7 @@ export default function BookingPage() {
     const endTime = getEndTime(selectedSlots)
 
     const { error } = await supabase.from('bookings').insert({
-      booking_number: crypto.randomUUID(), // DB の UNIQUE NOT NULL 制約を満たすため内部生成（表示しない）
+      booking_number: crypto.randomUUID(),
       facility_id: selectedFacility.id,
       facility_name: selectedFacility.name,
       date: selectedDate,
@@ -134,8 +173,6 @@ export default function BookingPage() {
       return
     }
 
-    // 確認メール送信（失敗しても予約は完了扱い）
-    // supabase.functions.invoke は UTF-8 バイトを壊すため、fetch 直接 + Unicode エスケープで送信
     if (email.trim()) {
       const payload = {
         email: email.trim().toLowerCase(),
@@ -146,7 +183,6 @@ export default function BookingPage() {
         duration: selectedSlots.length * 30,
         appUrl: window.location.origin,
       }
-      // 非ASCII文字を \uXXXX 形式にエスケープして Supabase インフラの文字化けを防ぐ
       const safeBody = JSON.stringify(payload).replace(
         /[\u007F-\uFFFF]/g,
         (chr) => '\\u' + ('0000' + chr.charCodeAt(0).toString(16)).slice(-4)
@@ -172,19 +208,20 @@ export default function BookingPage() {
     setStep(1)
     setSelectedDate(null)
     setSelectedSlots([])
+    setPendingStart(null)
     setName('')
     setEmail('')
     setSubmitError(null)
     fetchMonthBookings()
   }
 
-  const canProceedToStep2 = selectedDate && selectedSlots.length > 0
+  const canProceedToStep2 = selectedDate && selectedSlots.length > 0 && !pendingStart
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* ヘッダー */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
             <p className="text-xs text-gray-500">三島クロケット</p>
@@ -201,63 +238,90 @@ export default function BookingPage() {
         </div>
       </header>
 
-      <div className="max-w-lg mx-auto px-4 py-4 pb-24">
+      <div className="max-w-6xl mx-auto px-4 py-4 pb-24">
         <StepIndicator currentStep={step} />
 
         {/* ===== STEP 1 ===== */}
         {step === 1 && (
-          <div className="space-y-5 mt-4">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-600 mb-2">① 施設を選ぶ</h2>
-              <FacilityTabs facilities={FACILITIES} selected={selectedFacility} onChange={handleFacilityChange} />
-            </div>
-
-            <div>
-              <h2 className="text-sm font-semibold text-gray-600 mb-2">② 日付を選ぶ</h2>
-              <Calendar
-                selectedDate={selectedDate}
-                onDateSelect={handleDateSelect}
-                bookedDates={monthBookings}
-                currentMonth={currentMonth}
-                onMonthChange={setCurrentMonth}
-              />
-            </div>
-
-            {selectedDate && (
+          <div className="mt-4 lg:grid lg:grid-cols-2 lg:gap-8">
+            {/* 左カラム: 施設選択 + カレンダー */}
+            <div className="space-y-5">
               <div>
-                <h2 className="text-sm font-semibold text-gray-600 mb-1">③ 時間を選ぶ</h2>
-                <p className="text-xs text-gray-400 mb-2">30分単位・最大2時間まで（連続した時間帯のみ）</p>
-                {selectedSlots.length > 0 && (
-                  <div className="mb-3 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-100">
-                    <p className="text-sm text-blue-700 font-semibold">
-                      選択中: {formatTimeRange(selectedSlots)}
-                      <span className="text-blue-500 font-normal ml-2">（{selectedSlots.length * 30}分）</span>
-                    </p>
-                    <p className="text-xs text-blue-400 mt-0.5">
-                      {selectedSlots.length < 4 ? '別の時間をクリックして延長できます' : '最大2時間に達しました'}
-                    </p>
-                  </div>
-                )}
-                <TimeSlots bookings={dayBookings} selectedSlots={selectedSlots} onSlotSelect={handleSlotSelect} />
+                <h2 className="text-sm font-semibold text-gray-600 mb-2">① 施設を選ぶ</h2>
+                <FacilityTabs facilities={FACILITIES} selected={selectedFacility} onChange={handleFacilityChange} />
               </div>
-            )}
 
-            <button
-              disabled={!canProceedToStep2}
-              onClick={() => setStep(2)}
-              className={`w-full py-4 rounded-xl font-semibold text-base transition-colors
-                ${canProceedToStep2
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-            >
-              次へ（内容確認）
-            </button>
+              <div>
+                <h2 className="text-sm font-semibold text-gray-600 mb-2">② 日付を選ぶ</h2>
+                <Calendar
+                  selectedDate={selectedDate}
+                  onDateSelect={handleDateSelect}
+                  bookedDates={monthBookings}
+                  currentMonth={currentMonth}
+                  onMonthChange={setCurrentMonth}
+                />
+              </div>
+            </div>
+
+            {/* 右カラム: 時間選択 + 次へボタン */}
+            <div className="space-y-5 mt-5 lg:mt-0">
+              {selectedDate ? (
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-600 mb-1">③ 時間を選ぶ</h2>
+                  <p className="text-xs text-gray-400 mb-2">
+                    開始時間をクリック → 終了時間をクリック（最大2時間）
+                  </p>
+                  {pendingStart && selectedSlots.length === 0 && (
+                    <div className="mb-3 px-3 py-2.5 bg-orange-50 rounded-lg border border-orange-100">
+                      <p className="text-sm text-orange-700 font-semibold">
+                        開始: {pendingStart} — 終了時間をクリックしてください
+                      </p>
+                      <p className="text-xs text-orange-400 mt-0.5">
+                        同じ時刻をクリックするとキャンセルできます
+                      </p>
+                    </div>
+                  )}
+                  {selectedSlots.length > 0 && (
+                    <div className="mb-3 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-100">
+                      <p className="text-sm text-blue-700 font-semibold">
+                        選択中: {formatTimeRange(selectedSlots)}
+                        <span className="text-blue-500 font-normal ml-2">（{selectedSlots.length * 30}分）</span>
+                      </p>
+                      <p className="text-xs text-blue-400 mt-0.5">
+                        再選択するには開始時間をクリックしてください
+                      </p>
+                    </div>
+                  )}
+                  <TimeSlots
+                    bookings={dayBookings}
+                    selectedSlots={selectedSlots}
+                    onSlotClick={handleSlotClick}
+                    pendingStart={pendingStart}
+                  />
+                </div>
+              ) : (
+                <div className="hidden lg:flex items-center justify-center h-48 bg-white rounded-xl border border-gray-200 border-dashed text-gray-400 text-sm">
+                  ← 日付を選択すると時間が表示されます
+                </div>
+              )}
+
+              <button
+                disabled={!canProceedToStep2}
+                onClick={() => setStep(2)}
+                className={`w-full py-4 rounded-xl font-semibold text-base transition-colors
+                  ${canProceedToStep2
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+              >
+                次へ（内容確認）
+              </button>
+            </div>
           </div>
         )}
 
         {/* ===== STEP 2 ===== */}
         {step === 2 && (
-          <div className="space-y-4 mt-4">
+          <div className="max-w-lg mx-auto space-y-4 mt-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <h2 className="text-base font-semibold text-gray-800 mb-3">予約内容の確認</h2>
               <div>
@@ -337,7 +401,7 @@ export default function BookingPage() {
 
         {/* ===== STEP 3 ===== */}
         {step === 3 && (
-          <div className="space-y-4 mt-4">
+          <div className="max-w-lg mx-auto space-y-4 mt-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex flex-col items-center mb-5">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-3">
