@@ -23,13 +23,6 @@ function getJSTTarget(): { date: string; targetTime: string } {
   return { date, targetTime: `${h}:${m}` }
 }
 
-// HH:MM 同士の差分（分）を計算
-function diffMinutes(start: string, end: string): number {
-  const [sh, sm] = start.split(':').map(Number)
-  const [eh, em] = end.split(':').map(Number)
-  return (eh * 60 + em) - (sh * 60 + sm)
-}
-
 // "YYYY-MM-DD" → "2025年1月15日（水）"
 function formatDateJP(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
@@ -71,9 +64,8 @@ serve(async (req) => {
 
       const hasNextBooking = (nextBookings?.length ?? 0) > 0
 
-      // 延長可否：最大2時間（120分）を超えない場合のみ
-      const currentDuration = diffMinutes(booking.start_time, booking.end_time)
-      const canExtend = !hasNextBooking && currentDuration + 30 <= 120
+      // 延長可否：後続予約がなければ無制限に延長可能
+      const canExtend = !hasNextBooking
 
       const extendUrl =
         `${SUPABASE_URL}/functions/v1/extend-booking?id=${encodeURIComponent(booking.id)}`
