@@ -1,5 +1,6 @@
 // 時間スロット選択コンポーネント
-// 2クリック方式: 1クリック目=最初の枠、2クリック目=最後の枠（INCLUSIVE）
+// 2クリック方式: 1クリック目=開始時刻、2クリック目=終了時刻（EXCLUSIVE）
+// 例: 10:00クリック → 11:00クリック → 10:00〜11:00（60分）
 
 import { TIME_SLOTS } from '../lib/utils'
 
@@ -9,6 +10,10 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
   }
 
   function getSlotStyle(timeStr) {
+    if (timeStr === '18:00') {
+      if (!pendingStart) return 'text-gray-300 cursor-not-allowed'
+      return 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
+    }
     if (isBooked(timeStr)) return 'bg-red-50 text-red-300 cursor-not-allowed'
     if (timeStr === pendingStart) return 'bg-orange-400 text-white'
     if (selectedSlots.includes(timeStr)) return 'bg-blue-600 text-white'
@@ -51,6 +56,21 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
             </div>
           </div>
         ))}
+        {/* 18:00 終了時刻ボタン（最終枠の終了用） */}
+        <div className="flex">
+          <div className="w-12 flex-shrink-0 flex items-center justify-center text-xs text-gray-400 bg-gray-50 border-r border-gray-100">
+            18時
+          </div>
+          <div className="flex flex-1">
+            <button
+              disabled={!pendingStart}
+              onClick={() => pendingStart && onSlotClick('18:00')}
+              className={`flex-1 py-3 text-sm font-medium border-l border-gray-100 transition-colors ${getSlotStyle('18:00')}`}
+            >
+              18:00
+            </button>
+          </div>
+        </div>
       </div>
       <div className="px-3 py-2 bg-gray-50 border-t border-gray-100">
         <p className="text-xs text-gray-400 flex items-center gap-3 flex-wrap">
@@ -60,7 +80,7 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-orange-400 rounded align-middle" />
-            最初の枠
+            開始時刻
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-blue-600 rounded align-middle" />

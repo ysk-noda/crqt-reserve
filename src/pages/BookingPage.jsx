@@ -93,47 +93,55 @@ export default function BookingPage() {
     return dayBookings.some((b) => timeStr >= b.start_time && timeStr < b.end_time)
   }
 
-  // 2クリック方式: 1クリック目=最初の枠、2クリック目=最後の枠（INCLUSIVE）
-  // 例: 10:00クリック → 10:30クリック → 10:00〜11:00 が選択される
+  // 2クリック方式: 1クリック目=開始時刻、2クリック目=終了時刻（EXCLUSIVE）
+  // 例: 10:00クリック → 11:00クリック → 10:00〜11:00（60分）
+  //     10:00クリック → 10:30クリック → 10:00〜10:30（30分）
   function handleSlotClick(timeStr) {
-    if (isSlotBooked(timeStr)) return
+    const isEnd18 = timeStr === '18:00'
+
+    if (!isEnd18 && isSlotBooked(timeStr)) return
 
     if (!pendingStart) {
-      // 1クリック目: 最初の枠を設定
+      // 1クリック目: 開始時刻を設定（18:00は開始不可）
+      if (isEnd18) return
       setPendingStart(timeStr)
       setSelectedSlots([])
       return
     }
 
     // pendingStart が設定済み
-    if (timeStr === pendingStart) {
-      // 同じ枠をクリック: キャンセル
+    if (!isEnd18 && timeStr === pendingStart) {
+      // 同じ時刻: キャンセル
       setPendingStart(null)
       setSelectedSlots([])
       return
     }
 
-    if (timeStr < pendingStart) {
+    if (!isEnd18 && timeStr < pendingStart) {
       // 開始より前: 新しい開始として設定
       setPendingStart(timeStr)
       setSelectedSlots([])
       return
     }
 
-    // 2クリック目: pendingStart〜timeStr を含む範囲（INCLUSIVE）
-    const range = TIME_SLOTS.filter((s) => s >= pendingStart && s <= timeStr)
+    // 2クリック目: pendingStart 以上 timeStr 未満（EXCLUSIVE = timeStr が終了時刻）
+    const range = TIME_SLOTS.filter((s) => s >= pendingStart && s < timeStr)
 
-    if (range.length > 4) {
-      // 2時間超: 新しい開始として設定
-      setPendingStart(timeStr)
-      setSelectedSlots([])
+    if (range.length === 0 || range.length > 4) {
+      // 0スロット or 2時間超: 新しい開始として設定（18:00は除く）
+      if (!isEnd18) {
+        setPendingStart(timeStr)
+        setSelectedSlots([])
+      }
       return
     }
 
     if (range.some((s) => isSlotBooked(s))) {
-      // 範囲内に予約済みスロットあり: 新しい開始として設定
-      setPendingStart(timeStr)
-      setSelectedSlots([])
+      // 範囲内に予約済みスロットあり: 新しい開始として設定（18:00は除く）
+      if (!isEnd18) {
+        setPendingStart(timeStr)
+        setSelectedSlots([])
+      }
       return
     }
 
@@ -263,15 +271,15 @@ export default function BookingPage() {
                 <div>
                   <h2 className="text-sm font-semibold text-gray-600 mb-1">③ 時間を選ぶ</h2>
                   <p className="text-xs text-gray-400 mb-2">
-                    最初の枠をクリック → 最後の枠をクリック（最大2時間）
+                    開始時刻をクリック → 終了時刻をクリック（例: 10:00 → 11:30 で 90分）
                   </p>
                   {pendingStart && selectedSlots.length === 0 && (
                     <div className="mb-3 px-3 py-2.5 bg-orange-50 rounded-lg border border-orange-100">
                       <p className="text-sm text-orange-700 font-semibold">
-                        開始: {pendingStart} — 使いたい最後の枠をクリックしてください
+                        開始: {pendingStart} — 終了時刻をクリックしてください
                       </p>
                       <p className="text-xs text-orange-400 mt-0.5">
-                        同じ枠をクリックするとキャンセルできます
+                        同じ時刻をクリックするとキャンセルできます
                       </p>
                     </div>
                   )}
