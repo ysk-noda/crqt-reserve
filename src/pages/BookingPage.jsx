@@ -308,6 +308,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
                     selectedSlots={selectedSlots}
                     onSlotClick={handleSlotClick}
                     pendingStart={pendingStart}
+                    endTime={selectedSlots.length > 0 ? getEndTime(selectedSlots) : null}
                   />
                 </div>
               ) : (

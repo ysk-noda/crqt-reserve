@@ -4,19 +4,21 @@
 
 import { TIME_SLOTS } from '../lib/utils'
 
-export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendingStart }) {
+export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendingStart, endTime }) {
   function isBooked(timeStr) {
     return bookings.some((b) => timeStr >= b.start_time && timeStr < b.end_time)
   }
 
   function getSlotStyle(timeStr) {
     if (timeStr === '18:00') {
+      if (endTime === '18:00') return 'bg-blue-200 text-blue-700'
       if (!pendingStart) return 'text-gray-300 cursor-not-allowed'
       return 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
     }
     if (isBooked(timeStr)) return 'bg-red-50 text-red-300 cursor-not-allowed'
     if (timeStr === pendingStart) return 'bg-orange-400 text-white'
     if (selectedSlots.includes(timeStr)) return 'bg-blue-600 text-white'
+    if (timeStr === endTime) return 'bg-blue-200 text-blue-700'
     return 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
   }
 
@@ -85,6 +87,10 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-blue-600 rounded align-middle" />
             選択中
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 bg-blue-200 rounded align-middle" />
+            終了時刻
           </span>
         </p>
       </div>
