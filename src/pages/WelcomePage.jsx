@@ -24,15 +24,15 @@ export default function WelcomePage() {
         <div className="space-y-4">
           <button
             onClick={() => navigate('/')}
-            className="w-full bg-blue-600 text-white rounded-2xl px-6 py-5 text-left shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors"
+            className="w-full bg-blue-600 text-white rounded-2xl px-6 py-5 text-center shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors"
           >
-            <p className="text-lg font-bold">月額会員の方</p>
+            <p className="text-lg font-bold">会員の方</p>
             <p className="text-sm text-blue-200 mt-0.5">会議室・フォンボックスを予約</p>
           </button>
 
           <button
             onClick={() => navigate('/drop-in')}
-            className="w-full bg-white text-gray-800 rounded-2xl px-6 py-5 text-left shadow-sm border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+            className="w-full bg-white text-gray-800 rounded-2xl px-6 py-5 text-center shadow-sm border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-colors"
           >
             <p className="text-lg font-bold">ドロップインの方</p>
             <p className="text-sm text-gray-400 mt-0.5">フォンボックスを予約</p>
