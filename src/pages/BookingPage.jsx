@@ -14,11 +14,11 @@ import TimeSlots from '../components/TimeSlots'
 import StepIndicator from '../components/StepIndicator'
 import MyReservations from '../components/MyReservations'
 
-export default function BookingPage() {
+export default function BookingPage({ facilities = FACILITIES, mode = 'member' }) {
   const [step, setStep] = useState(1)
 
   // ステップ1
-  const [selectedFacility, setSelectedFacility] = useState(FACILITIES[0])
+  const [selectedFacility, setSelectedFacility] = useState(facilities[0])
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedSlots, setSelectedSlots] = useState([]) // 確定した選択範囲
   const [pendingStart, setPendingStart] = useState(null)  // 1クリック目の開始時間（待機中）
@@ -225,7 +225,14 @@ export default function BookingPage() {
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
+              {mode === 'dropin' && (
+                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
+                  ドロップイン専用
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">三島クロケット</p>
           </div>
           <button
@@ -250,7 +257,7 @@ export default function BookingPage() {
             <div className="space-y-5">
               <div>
                 <h2 className="text-sm font-semibold text-gray-600 mb-2">① 施設を選ぶ</h2>
-                <FacilityTabs facilities={FACILITIES} selected={selectedFacility} onChange={handleFacilityChange} />
+                <FacilityTabs facilities={facilities} selected={selectedFacility} onChange={handleFacilityChange} />
               </div>
 
               <div>
