@@ -30,8 +30,8 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
   const [dayBookings, setDayBookings] = useState([])
 
   // ステップ2
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [name, setName] = useState(() => localStorage.getItem('crqt_name') || '')
+  const [email, setEmail] = useState(() => localStorage.getItem('crqt_email') || '')
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
@@ -202,6 +202,8 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
       ).catch((e) => console.error('Email send failed:', e))
     }
 
+    localStorage.setItem('crqt_name', name.trim())
+    if (email.trim()) localStorage.setItem('crqt_email', email.trim().toLowerCase())
     setSubmitting(false)
     setStep(3)
   }
