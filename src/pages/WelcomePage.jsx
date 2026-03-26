@@ -6,6 +6,7 @@ export default function WelcomePage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
+
         {/* ロゴ・タイトル */}
         <div className="text-center mb-10">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -38,6 +39,13 @@ export default function WelcomePage() {
             <p className="text-sm text-gray-400 mt-0.5">フォンボックスを予約</p>
           </button>
         </div>
+
+        {/* フッター */}
+        <p className="text-center mt-8">
+          <a href="/terms" className="text-xs text-gray-400 hover:text-gray-600 underline">
+            利用規約
+          </a>
+        </p>
       </div>
     </div>
   )

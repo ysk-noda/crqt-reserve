@@ -449,6 +449,13 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
       </div>
 
       {showMyPage && <MyReservations onClose={() => setShowMyPage(false)} />}
+
+      {/* フッター */}
+      <footer className="py-4 text-center">
+        <a href="/terms" className="text-xs text-gray-400 hover:text-gray-600 underline">
+          利用規約
+        </a>
+      </footer>
     </div>
   )
 }
