@@ -10,8 +10,8 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
   }
 
   function getSlotStyle(timeStr) {
-    if (timeStr === '18:00') {
-      if (endTime === '18:00') return 'bg-blue-200 text-blue-700'
+    if (timeStr === '24:00') {
+      if (endTime === '24:00') return 'bg-blue-200 text-blue-700'
       if (!pendingStart) return 'text-gray-300 cursor-not-allowed'
       return 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
     }
@@ -58,18 +58,18 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
             </div>
           </div>
         ))}
-        {/* 18:00 終了時刻ボタン（最終枠の終了用） */}
+        {/* 24:00 終了時刻ボタン（最終枠の終了用） */}
         <div className="flex">
           <div className="w-12 flex-shrink-0 flex items-center justify-center text-xs text-gray-400 bg-gray-50 border-r border-gray-100">
-            18時
+            24時
           </div>
           <div className="flex flex-1">
             <button
               disabled={!pendingStart}
-              onClick={() => pendingStart && onSlotClick('18:00')}
-              className={`flex-1 py-3 text-sm font-medium border-l border-gray-100 transition-colors ${getSlotStyle('18:00')}`}
+              onClick={() => pendingStart && onSlotClick('24:00')}
+              className={`flex-1 py-3 text-sm font-medium border-l border-gray-100 transition-colors ${getSlotStyle('24:00')}`}
             >
-              18:00
+              24:00
             </button>
           </div>
         </div>

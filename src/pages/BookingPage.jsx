@@ -97,12 +97,12 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
   // 例: 10:00クリック → 11:00クリック → 10:00〜11:00（60分）
   //     10:00クリック → 10:30クリック → 10:00〜10:30（30分）
   function handleSlotClick(timeStr) {
-    const isEnd18 = timeStr === '18:00'
+    const isEnd18 = timeStr === '24:00'
 
     if (!isEnd18 && isSlotBooked(timeStr)) return
 
     if (!pendingStart) {
-      // 1クリック目: 開始時刻を設定（18:00は開始不可）
+      // 1クリック目: 開始時刻を設定（24:00は開始不可）
       if (isEnd18) return
       setPendingStart(timeStr)
       setSelectedSlots([])
@@ -128,7 +128,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
     const range = TIME_SLOTS.filter((s) => s >= pendingStart && s < timeStr)
 
     if (range.length === 0 || range.length > 4) {
-      // 0スロット or 2時間超: 新しい開始として設定（18:00は除く）
+      // 0スロット or 2時間超: 新しい開始として設定（24:00は除く）
       if (!isEnd18) {
         setPendingStart(timeStr)
         setSelectedSlots([])
@@ -137,7 +137,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
     }
 
     if (range.some((s) => isSlotBooked(s))) {
-      // 範囲内に予約済みスロットあり: 新しい開始として設定（18:00は除く）
+      // 範囲内に予約済みスロットあり: 新しい開始として設定（24:00は除く）
       if (!isEnd18) {
         setPendingStart(timeStr)
         setSelectedSlots([])

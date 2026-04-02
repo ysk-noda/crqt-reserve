@@ -6,8 +6,8 @@ export const FACILITIES = [
   { id: 'phoneboxC', name: 'フォンボックス（地下・奥）' },
 ]
 
-// 09:00 〜 17:30 の30分単位スロット（18個、最終枠の終了は18:00）
-export const TIME_SLOTS = Array.from({ length: 18 }, (_, i) => {
+// 09:00 〜 23:30 の30分単位スロット（30個、最終枠の終了は24:00）
+export const TIME_SLOTS = Array.from({ length: 30 }, (_, i) => {
   const total = 9 * 60 + i * 30
   const h = String(Math.floor(total / 60)).padStart(2, '0')
   const m = String(total % 60).padStart(2, '0')
