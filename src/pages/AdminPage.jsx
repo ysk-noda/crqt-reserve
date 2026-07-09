@@ -277,14 +277,14 @@ export default function AdminPage() {
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">お名前</th>
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">メールアドレス</th>
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">予約日時</th>
-                    <th className="px-4 py-3"></th>
+                    <th className="px-4 py-3 sticky right-0 bg-gray-50 border-l border-gray-200 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {bookings.map((b) => (
-                    <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-blue-600 font-semibold whitespace-nowrap">
-                        {b.booking_number}
+                    <tr key={b.id} className="group border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono text-blue-600 font-semibold whitespace-nowrap" title={b.booking_number}>
+                        {b.booking_number?.slice(0, 8)}
                       </td>
                       <td className="px-4 py-3 text-gray-800 whitespace-nowrap">{b.facility_name}</td>
                       <td className="px-4 py-3 text-gray-800 whitespace-nowrap">{b.date}</td>
@@ -303,7 +303,7 @@ export default function AdminPage() {
                           hour: '2-digit', minute: '2-digit'
                         })}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 sticky right-0 bg-white group-hover:bg-gray-50 border-l border-gray-100 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.1)]">
                         <button
                           onClick={() => handleCancelBooking(b)}
                           disabled={cancelingId === b.id}
