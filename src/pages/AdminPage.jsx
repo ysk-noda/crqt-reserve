@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { FACILITIES } from '../lib/utils'
+import { FACILITIES, formatDate } from '../lib/utils'
+
+// 今週（月曜〜日曜）の日付範囲を返す
+function getWeekRange() {
+  const now = new Date()
+  const day = now.getDay() // 0=日 … 6=土
+  const diffToMon = (day + 6) % 7
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - diffToMon)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  return { start: formatDate(monday), end: formatDate(sunday) }
+}
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin1234'
 
@@ -15,11 +27,20 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [filterFacility, setFilterFacility] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [period, setPeriod] = useState('week') // 'week' = 今週 / 'all' = 全期間
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
   const [cancelingId, setCancelingId] = useState(null)
+
+  // 検索入力のデバウンス（入力が止まって300ms後に確定）
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchInput.trim()), 300)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   useEffect(() => {
     if (authed) fetchBookings()
-  }, [authed, filterFacility, filterDate])
+  }, [authed, filterFacility, filterDate, period, searchQuery])
 
   async function fetchBookings() {
     setLoading(true)
@@ -30,7 +51,17 @@ export default function AdminPage() {
       .order('start_time', { ascending: true })
 
     if (filterFacility) query = query.eq('facility_id', filterFacility)
-    if (filterDate) query = query.eq('date', filterDate)
+
+    if (searchQuery) {
+      // 名前・メールで検索（検索時は期間を横断して全件から探す）
+      const esc = searchQuery.replace(/[%,()]/g, ' ')
+      query = query.or(`name.ilike.%${esc}%,email.ilike.%${esc}%`)
+    } else if (filterDate) {
+      query = query.eq('date', filterDate)
+    } else if (period === 'week') {
+      const { start, end } = getWeekRange()
+      query = query.gte('date', start).lte('date', end)
+    }
 
     const { data, error } = await query
     if (!error) setBookings(data || [])
@@ -138,6 +169,52 @@ export default function AdminPage() {
         {/* フィルター */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
           <div className="flex flex-wrap items-center gap-3">
+            {/* 名前・メール検索 */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="名前・メールで検索"
+                className="w-56 pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <svg className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" />
+              </svg>
+              {searchInput && (
+                <button
+                  onClick={() => setSearchInput('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label="検索をクリア"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* 期間切り替え（今週 / 全期間）— 検索中・日付指定中は無効 */}
+            <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+              {[
+                { key: 'week', label: '今週' },
+                { key: 'all', label: '全期間' },
+              ].map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => setPeriod(p.key)}
+                  disabled={!!searchQuery || !!filterDate}
+                  className={`
+                    px-3 py-2 text-sm transition-colors
+                    ${period === p.key && !searchQuery && !filterDate
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50'}
+                    ${(searchQuery || filterDate) ? 'opacity-40 cursor-not-allowed' : ''}
+                  `}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
             <select
               value={filterFacility}
               onChange={(e) => setFilterFacility(e.target.value)}
@@ -156,9 +233,9 @@ export default function AdminPage() {
               className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
 
-            {(filterFacility || filterDate) && (
+            {(filterFacility || filterDate || searchInput || period !== 'week') && (
               <button
-                onClick={() => { setFilterFacility(''); setFilterDate('') }}
+                onClick={() => { setFilterFacility(''); setFilterDate(''); setSearchInput(''); setPeriod('week') }}
                 className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 フィルターをリセット
@@ -198,6 +275,7 @@ export default function AdminPage() {
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">日付</th>
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">時間</th>
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">お名前</th>
+                    <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">メールアドレス</th>
                     <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">予約日時</th>
                     <th className="px-4 py-3"></th>
                   </tr>
@@ -214,6 +292,11 @@ export default function AdminPage() {
                         {b.start_time} 〜 {b.end_time}
                       </td>
                       <td className="px-4 py-3 text-gray-800">{b.name}</td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {b.email
+                          ? <a href={`mailto:${b.email}`} className="text-blue-600 hover:underline">{b.email}</a>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
                         {new Date(b.created_at).toLocaleString('ja-JP', {
                           year: 'numeric', month: '2-digit', day: '2-digit',
