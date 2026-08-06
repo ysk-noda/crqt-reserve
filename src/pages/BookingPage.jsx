@@ -36,7 +36,10 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
   const [submitError, setSubmitError] = useState(null)
 
   // マイページモーダル
-  const [showMyPage, setShowMyPage] = useState(false)
+  // 確認メールのキャンセルリンク（?my=1&email=...）で開いた場合は、最初から開いて検索まで進める
+  const initialMy = new URLSearchParams(window.location.search)
+  const [showMyPage, setShowMyPage] = useState(initialMy.get('my') === '1')
+  const [myEmail]  = useState(initialMy.get('email') || '')
 
   useEffect(() => {
     fetchMonthBookings()
@@ -243,10 +246,13 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
             onClick={() => setShowMyPage(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-600 text-sm font-medium hover:bg-blue-100 active:bg-blue-200 transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            予約確認
+            {/* 「予約確認」だけだとキャンセルできることが伝わらず、問い合わせの原因になっていた。
+                狭い画面では折り返さないよう2段階の表記にする */}
+            <span className="hidden sm:inline">予約確認・キャンセル</span>
+            <span className="sm:hidden">確認・取消</span>
           </button>
         </div>
       </header>
@@ -450,7 +456,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
         )}
       </div>
 
-      {showMyPage && <MyReservations onClose={() => setShowMyPage(false)} />}
+      {showMyPage && <MyReservations initialEmail={myEmail} onClose={() => setShowMyPage(false)} />}
     </div>
   )
 }

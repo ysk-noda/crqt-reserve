@@ -31,7 +31,12 @@ serve(async (req) => {
     const text = new TextDecoder('utf-8').decode(buffer)
     const { email, name, facilityName, date, timeRange, duration, appUrl } = JSON.parse(text)
 
-    const cancelUrl = appUrl ?? 'https://crqt-reserve.vercel.app'
+    // 予約確認・キャンセル画面を直接開くURL。
+    // 以前はトップページのURLをそのまま貼っていたため、「キャンセルはこちら」を押しても
+    // 新規予約の画面が開くだけで、利用者が自分でキャンセル方法を探す必要があった。
+    // ?my=1 で確認モーダルを自動で開き、メールアドレスも埋めた状態にする。
+    const baseUrl   = appUrl ?? 'https://crqt-reserve.vercel.app'
+    const cancelUrl = `${baseUrl}/?my=1&email=${encodeURIComponent(email)}`
 
     const html = `
 <!DOCTYPE html>

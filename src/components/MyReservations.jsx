@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { formatDate, formatDateJP } from '../lib/utils'
 
-export default function MyReservations({ onClose }) {
-  const [email, setEmail] = useState('')
+export default function MyReservations({ onClose, initialEmail = '' }) {
+  const [email, setEmail] = useState(initialEmail)
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
   const [cancelingId, setCancelingId] = useState(null)
+
+  // 確認メールのリンクから来た場合はメールが入った状態なので、そのまま検索まで済ませる
+  useEffect(() => {
+    if (initialEmail) handleSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleSearch() {
     if (!email.trim()) return
