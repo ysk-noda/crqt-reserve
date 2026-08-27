@@ -101,12 +101,11 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
   //     10:00クリック → 10:30クリック → 10:00〜10:30（30分）
   function handleSlotClick(timeStr) {
     const isEnd18 = timeStr === '24:00'
-
-    if (!isEnd18 && isSlotBooked(timeStr)) return
+    const booked = !isEnd18 && isSlotBooked(timeStr)
 
     if (!pendingStart) {
-      // 1クリック目: 開始時刻を設定（24:00は開始不可）
-      if (isEnd18) return
+      // 1クリック目: 開始時刻を設定（予約済み・24:00は開始不可）
+      if (isEnd18 || booked) return
       setPendingStart(timeStr)
       setSelectedSlots([])
       return
@@ -121,27 +120,21 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
     }
 
     if (!isEnd18 && timeStr < pendingStart) {
-      // 開始より前: 新しい開始として設定
+      // 開始より前: 空きマスなら新しい開始として設定
+      if (booked) return
       setPendingStart(timeStr)
       setSelectedSlots([])
       return
     }
 
     // 2クリック目: pendingStart 以上 timeStr 未満（EXCLUSIVE = timeStr が終了時刻）
+    // 終了時刻はそのマス自体を使わないので、予約済みマスでも「ここまで」としてなら選べる
+    // （例: 16:00に予約がある日に 15:30→16:00 で予約する）。範囲の重なりは下で検証する
     const range = TIME_SLOTS.filter((s) => s >= pendingStart && s < timeStr)
 
-    if (range.length === 0 || range.length > 4) {
-      // 0スロット or 2時間超: 新しい開始として設定（24:00は除く）
-      if (!isEnd18) {
-        setPendingStart(timeStr)
-        setSelectedSlots([])
-      }
-      return
-    }
-
-    if (range.some((s) => isSlotBooked(s))) {
-      // 範囲内に予約済みスロットあり: 新しい開始として設定（24:00は除く）
-      if (!isEnd18) {
+    if (range.length === 0 || range.length > 4 || range.some((s) => isSlotBooked(s))) {
+      // 無効な範囲（0スロット・2時間超・途中に予約あり）: 空きマスなら新しい開始として設定し直す
+      if (!isEnd18 && !booked) {
         setPendingStart(timeStr)
         setSelectedSlots([])
       }

@@ -37,6 +37,55 @@
 
 ---
 
+## [2026-08-20] 管理画面が「読み込み中」のまま止まる → 真因は自プロジェクトの資源枯渇（cron実行履歴22万件）
+
+### ★結論（同日中に解決）
+- **真因：pg_cronの毎分ジョブ（notify-ending-soon）の実行履歴が22.4万件・93MBに蓄積し、
+  無料枠のnanoインスタンスがDISK IO 100%・CPU 91%で飽和**していた。DB接続すら受けられない状態
+- 当初「Supabaseのプラットフォーム障害（API Gateway劣化）」と結論したが**誤り**。
+  障害情報は実際に出ていたものの、決め手はダッシュボードに出ていた
+  「Your project is currently exhausting multiple resources」のアラート（ユーザーが発見）
+- **教訓：外部の障害情報と症状が一致しても、自分のプロジェクト固有の状態
+  （ダッシュボードのアラート・リソースグラフ）を見るまで断定しない。**
+  「外のせい」は楽な結論なので特に疑ってかかる
+
+### 復旧手順（実施済み）
+1. Settings → General → **Restart project**（詰まった接続を全部切る）→ SQLが通るようになった
+2. `select cron.unschedule(1);` … 毎分ジョブを停止（止血）
+3. `truncate table cron.job_run_details;` … 実行履歴22.4万件・93MBを全削除（ただのログ。予約データとは無関係）
+4. REST APIが0.9秒で応答することを確認。復旧
+
+### 再発防止（すべて同日実施済み）
+1. ✅ notify-ending-soon を `* 9-23 * * *` で再登録（jobid 2。深夜早朝は予約が終わらないので回さない。実行回数4割減）
+2. ✅ 掃除ジョブ cleanup-cron-logs を追加（jobid 3、毎朝3時に7日より古い実行履歴を削除。
+   **これが最初から入っていれば起きなかった**）
+3. ✅ クロケットの死活監視（gas_new/12）に「予約DBが応答するか・5秒超で遅くないか」のチェックを追加。
+   次からは会員より先に毎朝のChat通知で気づける
+- pg_netの応答ログ（Edge Function呼び出しの記録）は6時間で自動削除される仕組みのため対処不要
+- 保存済みクエリ「終了5分前通知ジョブのスケジューリング」は旧内容（毎分）のまま残すと
+  再登録事故のもとなので、9-23時版に上書き（またはリネームで区別）しておくこと
+- ダッシュボードの資源枯渇アラートは使用量の集計が追いつくまで表示が残ることがある（数時間〜1日）
+
+### 当初の切り分け（記録として残す）
+- /admin がログイン後「読み込み中...」のまま進まない
+- コード変更はしていない（直近の作業は会員管理Web側のみ）
+- 切り分けの足取り：
+  1. Supabaseのエッジは生きている（キー無しの401が0.3秒で返る）
+  2. **データの問い合わせ（rest/v1/bookings）だけが20秒無応答**（curlで再現。バンドルからanonキーを抽出して管理画面と同じクエリを実行）
+  3. `npx supabase projects list` → プロジェクトは ACTIVE_HEALTHY（DBは健康）
+  4. status.supabase.com → **「Partially Degraded Service」、API Gateway が degraded_performance**
+- 結論：API Gatewayの障害でDBに届く前に詰まっている。こちらで直せるものはない（再デプロイ・再起動も無意味）
+
+### 覚えておくこと
+- **AdminPage.jsx の fetchBookings は、クエリが例外を投げると setLoading(false) に到達せず
+  「読み込み中」のまま固まる**。エラー時は「0件」表示、無限読み込みは「返ってこない」のサイン
+- 会員側の予約（空き表示・確定・確認メール）も同時に影響を受ける。**LINEのドロップイン予約は
+  別系統（Cloudflare→GAS）なので無事**
+- 復旧確認：status.supabase.com の API Gateway が operational に戻る、
+  または `curl "https://jldhnoohjtwhzavjqgub.supabase.co/rest/v1/bookings?select=id&limit=1" -H "apikey: <anonキー>"` が返るようになる
+
+---
+
 ## [2026-08-06] 予約キャンセルの導線を修正
 
 ### 背景・前提

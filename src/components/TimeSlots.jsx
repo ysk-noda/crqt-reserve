@@ -9,16 +9,28 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
     return bookings.some((b) => timeStr >= b.start_time && timeStr < b.end_time)
   }
 
+  // 予約済みマスでも「終了時刻として」なら選べる境界かどうか。
+  // 開始選択中に、開始からこのマスまでの間がすべて空きで2時間以内なら、
+  // 「次の予約の開始時刻ちょうどまで使う」予約が可能（例: 16:00に予約→15:30〜16:00は取れる）
+  function isEndBoundary(timeStr) {
+    if (!pendingStart || timeStr <= pendingStart || !isBooked(timeStr)) return false
+    const range = TIME_SLOTS.filter((s) => s >= pendingStart && s < timeStr)
+    return range.length >= 1 && range.length <= 4 && !range.some((s) => isBooked(s))
+  }
+
   function getSlotStyle(timeStr) {
     if (timeStr === '24:00') {
       if (endTime === '24:00') return 'bg-blue-200 text-blue-700'
       if (!pendingStart) return 'text-gray-300 cursor-not-allowed'
       return 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
     }
-    if (isBooked(timeStr)) return 'bg-red-50 text-red-300 cursor-not-allowed'
+    if (timeStr === endTime) return 'bg-blue-200 text-blue-700'
+    if (isBooked(timeStr)) {
+      if (isEndBoundary(timeStr)) return 'bg-red-50 text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
+      return 'bg-red-50 text-red-300 cursor-not-allowed'
+    }
     if (timeStr === pendingStart) return 'bg-orange-400 text-white'
     if (selectedSlots.includes(timeStr)) return 'bg-blue-600 text-white'
-    if (timeStr === endTime) return 'bg-blue-200 text-blue-700'
     return 'text-gray-700 hover:bg-blue-50 hover:text-blue-600 active:bg-blue-100'
   }
 
@@ -44,14 +56,15 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
             <div className="flex flex-1">
               {slots.map((slot) => {
                 const booked = isBooked(slot)
+                const endOk  = isEndBoundary(slot)   // 予約済みでも終了時刻としては押せる
                 return (
                   <button
                     key={slot}
-                    disabled={booked}
-                    onClick={() => !booked && onSlotClick(slot)}
+                    disabled={booked && !endOk}
+                    onClick={() => (!booked || endOk) && onSlotClick(slot)}
                     className={`flex-1 py-3 text-sm font-medium border-l border-gray-100 transition-colors ${getSlotStyle(slot)}`}
                   >
-                    {booked ? '×' : slot}
+                    {booked && !endOk && slot !== endTime ? '×' : slot}
                   </button>
                 )
               })}
