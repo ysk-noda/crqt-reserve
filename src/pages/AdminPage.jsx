@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { useState, useEffect, useMemo } from 'react'
 import { FACILITIES, formatDate } from '../lib/utils'
 
 // 今週（月曜〜日曜）の日付範囲を返す
@@ -14,12 +13,24 @@ function getWeekRange() {
   return { start: formatDate(monday), end: formatDate(sunday) }
 }
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin1234'
+// 管理操作はすべて Edge Function（admin-bookings）経由。
+// 以前はパスワードをフロントに埋め込み、anonキーで直接DBを触っていたが、
+// パスワード照合・全件取得・削除をサーバー側に移した（2026-10-28）。
+const ADMIN_API = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-bookings`
+
+async function adminApi(password, body) {
+  const res = await fetch(ADMIN_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, ...body }),
+  })
+  const json = await res.json().catch(() => ({}))
+  return { status: res.status, ...json }
+}
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(() => {
-    return sessionStorage.getItem('admin_authed') === 'true'
-  })
+  const [password, setPassword] = useState(() => sessionStorage.getItem('admin_pw') || '')
+  const [authed, setAuthed] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordError, setPasswordError] = useState(false)
 
@@ -38,42 +49,49 @@ export default function AdminPage() {
     return () => clearTimeout(t)
   }, [searchInput])
 
+  // セッションにパスワードが残っていたら自動ログイン（サーバーで検証される）
   useEffect(() => {
-    if (authed) fetchBookings()
-  }, [authed, filterFacility, filterDate, period, searchQuery])
+    if (password && !authed) loginWith(password)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function loginWith(pw) {
+    setLoading(true)
+    const r = await adminApi(pw, { action: 'list' })
+    setLoading(false)
+    if (r.status === 200) {
+      sessionStorage.setItem('admin_pw', pw)
+      setPassword(pw)
+      setAuthed(true)
+      setBookings(r.bookings || [])
+      return true
+    }
+    sessionStorage.removeItem('admin_pw')
+    setPassword('')
+    setAuthed(false)
+    return false
+  }
+
+  async function handleLogin() {
+    const ok = await loginWith(passwordInput)
+    if (!ok) setPasswordError(true)
+  }
+
+  function handleLogout() {
+    sessionStorage.removeItem('admin_pw')
+    setPassword('')
+    setAuthed(false)
+    setBookings([])
+  }
 
   async function fetchBookings() {
     setLoading(true)
-    let query = supabase
-      .from('bookings')
-      .select('*')
-      .order('date', { ascending: true })
-      .order('start_time', { ascending: true })
-
-    if (filterFacility) query = query.eq('facility_id', filterFacility)
-
-    if (searchQuery) {
-      // 名前・メールで検索（検索時は期間を横断して全件から探す）
-      const esc = searchQuery.replace(/[%,()]/g, ' ')
-      query = query.or(`name.ilike.%${esc}%,email.ilike.%${esc}%`)
-    } else if (filterDate) {
-      query = query.eq('date', filterDate)
-    } else if (period === 'week') {
-      const { start, end } = getWeekRange()
-      query = query.gte('date', start).lte('date', end)
-    }
-
-    const { data, error } = await query
-    if (!error) setBookings(data || [])
+    const r = await adminApi(password, { action: 'list' })
     setLoading(false)
-  }
-
-  function handleLogin() {
-    if (passwordInput === ADMIN_PASSWORD) {
-      sessionStorage.setItem('admin_authed', 'true')
-      setAuthed(true)
-    } else {
-      setPasswordError(true)
+    if (r.status === 200) {
+      setBookings(r.bookings || [])
+    } else if (r.status === 401) {
+      handleLogout()
     }
   }
 
@@ -81,18 +99,32 @@ export default function AdminPage() {
     if (!window.confirm(`以下の予約を取り消しますか？\n\n${booking.facility_name}\n${booking.date} ${booking.start_time}〜${booking.end_time}\n${booking.name} 様`)) return
 
     setCancelingId(booking.id)
-    const { error } = await supabase
-      .from('bookings')
-      .delete()
-      .eq('id', booking.id)
+    const r = await adminApi(password, { action: 'delete', id: booking.id })
     setCancelingId(null)
 
-    if (!error) {
+    if (r.status === 200) {
       setBookings((prev) => prev.filter((b) => b.id !== booking.id))
     } else {
       alert('取り消しに失敗しました。')
     }
   }
+
+  // 絞り込みはブラウザ内で行う（全件はログイン時・更新時にまとめて取得済み）
+  const shownBookings = useMemo(() => {
+    let list = bookings
+    if (filterFacility) list = list.filter((b) => b.facility_id === filterFacility)
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      list = list.filter((b) =>
+        (b.name || '').toLowerCase().includes(q) || (b.email || '').toLowerCase().includes(q))
+    } else if (filterDate) {
+      list = list.filter((b) => b.date === filterDate)
+    } else if (period === 'week') {
+      const { start, end } = getWeekRange()
+      list = list.filter((b) => b.date >= start && b.date <= end)
+    }
+    return list
+  }, [bookings, filterFacility, searchQuery, filterDate, period])
 
   // ログイン画面
   if (!authed) {
@@ -126,9 +158,10 @@ export default function AdminPage() {
           )}
           <button
             onClick={handleLogin}
-            className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors"
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors disabled:opacity-50"
           >
-            ログイン
+            {loading ? '確認中...' : 'ログイン'}
           </button>
         </div>
       </div>
@@ -153,10 +186,7 @@ export default function AdminPage() {
               予約ページへ
             </a>
             <button
-              onClick={() => {
-                sessionStorage.removeItem('admin_authed')
-                setAuthed(false)
-              }}
+              onClick={handleLogout}
               className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 rounded-lg px-3 py-1.5"
             >
               ログアウト
@@ -244,7 +274,7 @@ export default function AdminPage() {
 
             <div className="ml-auto flex items-center gap-3">
               <span className="text-sm text-gray-500">
-                {loading ? '読み込み中...' : `${bookings.length}件`}
+                {loading ? '読み込み中...' : `${shownBookings.length}件`}
               </span>
               <button
                 onClick={fetchBookings}
@@ -260,7 +290,7 @@ export default function AdminPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {loading ? (
             <div className="py-16 text-center text-gray-400">読み込み中...</div>
-          ) : bookings.length === 0 ? (
+          ) : shownBookings.length === 0 ? (
             <div className="py-16 text-center text-gray-400">
               <p className="text-4xl mb-3">📋</p>
               <p>予約はありません</p>
@@ -280,7 +310,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {bookings.map((b) => (
+                  {shownBookings.map((b) => (
                     <tr key={b.id} className="group border-b border-gray-100 hover:bg-gray-50">
                       <td className="px-4 py-3 text-gray-800 whitespace-nowrap">{b.facility_name}</td>
                       <td className="px-4 py-3 text-gray-800 whitespace-nowrap">{b.date}</td>

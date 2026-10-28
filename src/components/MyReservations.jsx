@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { formatDate, formatDateJP } from '../lib/utils'
+import { formatDateJP } from '../lib/utils'
 
 export default function MyReservations({ onClose, initialEmail = '' }) {
   const [email, setEmail] = useState(initialEmail)
@@ -20,15 +20,10 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
     setLoading(true)
     setSearched(false)
 
-    // 今日以降の予約を取得
-    const todayStr = formatDate(new Date())
+    // 今日以降の予約を取得（メール照合はサーバー側のRPCで行う。
+    // 以前はanonキーで直接selectしていたが、RLSを締めたため関数経由に変更。2026-10-28）
     const { data } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('email', email.trim().toLowerCase())
-      .gte('date', todayStr)
-      .order('date', { ascending: true })
-      .order('start_time', { ascending: true })
+      .rpc('my_reservations', { p_email: email.trim().toLowerCase() })
 
     setBookings(data || [])
     setLoading(false)
@@ -41,14 +36,12 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
     )) return
 
     setCancelingId(booking.id)
-    const { error } = await supabase
-      .from('bookings')
-      .delete()
-      .eq('id', booking.id)
-      .eq('email', email.trim().toLowerCase()) // メール照合でセキュリティ確保
+    // id＋メールの一致確認はサーバー側（cancel_booking）で行う
+    const { data: ok, error } = await supabase
+      .rpc('cancel_booking', { p_id: booking.id, p_email: email.trim().toLowerCase() })
 
     setCancelingId(null)
-    if (!error) {
+    if (!error && ok) {
       setBookings((prev) => prev.filter((b) => b.id !== booking.id))
     } else {
       alert('キャンセルに失敗しました。')
