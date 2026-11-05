@@ -38,13 +38,22 @@ serve(async (req) => {
     )
 
     if (action === 'list') {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('*')
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true })
-      if (error) return json({ error: error.message }, 500)
-      return json({ bookings: data })
+      // Supabaseは1リクエスト最大1000行のため、ページングで全件取得する
+      // （1000件で切れて新しい予約が管理画面に出ない不具合の修正。2026-11-05）
+      const PAGE = 1000
+      const all: unknown[] = []
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .order('date', { ascending: true })
+          .order('start_time', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error) return json({ error: error.message }, 500)
+        all.push(...(data ?? []))
+        if (!data || data.length < PAGE) break
+      }
+      return json({ bookings: all })
     }
 
     if (action === 'delete') {
