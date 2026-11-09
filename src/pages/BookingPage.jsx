@@ -2,19 +2,26 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   FACILITIES,
+  FACILITY_NAME_JA,
   TIME_SLOTS,
   formatDate,
   formatDateJP,
   getEndTime,
   formatTimeRange,
 } from '../lib/utils'
+import { STR, formatDateEN } from '../lib/i18n'
 import FacilityTabs from '../components/FacilityTabs'
 import Calendar from '../components/Calendar'
 import TimeSlots from '../components/TimeSlots'
 import StepIndicator from '../components/StepIndicator'
 import MyReservations from '../components/MyReservations'
 
-export default function BookingPage({ facilities = FACILITIES, mode = 'member' }) {
+export default function BookingPage({ facilities = FACILITIES, mode = 'member', lang = 'ja' }) {
+  const t = STR[lang]
+  const fmtDate = lang === 'en' ? formatDateEN : formatDateJP
+  // 時間範囲の表示（英語は「10:00 – 11:00」、日本語は従来どおり「10:00 〜 11:00」）
+  const fmtRange = (slots) => (lang === 'en' ? `${slots[0]} – ${getEndTime(slots)}` : formatTimeRange(slots))
+
   const [step, setStep] = useState(1)
 
   // ステップ1
@@ -154,10 +161,13 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
     const startTime = selectedSlots[0]
     const endTime = getEndTime(selectedSlots)
 
+    // facility_name は表示言語によらず日本語の正式名で保存する（管理画面・メールの表記を揃える）
+    const facilityNameJa = FACILITY_NAME_JA[selectedFacility.id] || selectedFacility.name
+
     const { error } = await supabase.from('bookings').insert({
       booking_number: crypto.randomUUID(),
       facility_id: selectedFacility.id,
-      facility_name: selectedFacility.name,
+      facility_name: facilityNameJa,
       date: selectedDate,
       start_time: startTime,
       end_time: endTime,
@@ -167,7 +177,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
 
     if (error) {
       setSubmitting(false)
-      setSubmitError('予約に失敗しました。時間を置いて再度お試しください。')
+      setSubmitError(t.submitError)
       return
     }
 
@@ -175,14 +185,14 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
       const payload = {
         email: email.trim().toLowerCase(),
         name: name.trim(),
-        facilityName: selectedFacility.name,
+        facilityName: facilityNameJa,
         date: formatDateJP(selectedDate),
         timeRange: formatTimeRange(selectedSlots),
         duration: selectedSlots.length * 30,
         appUrl: window.location.origin,
       }
       const safeBody = JSON.stringify(payload).replace(
-        /[\u007F-\uFFFF]/g,
+        /[\u007F-￿]/g,
         (chr) => '\\u' + ('0000' + chr.charCodeAt(0).toString(16)).slice(-4)
       )
       fetch(
@@ -224,15 +234,15 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-gray-800">施設予約</h1>
+              <h1 className="text-lg font-bold text-gray-800">{t.headerTitle}</h1>
               {mode === 'dropin' && (
                 <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full">
-                  ドロップイン専用
+                  {STR.ja.dropinBadge}
                 </span>
               )}
             </div>
             <p className="text-xs text-gray-500">
-              三島クロケット　<a href="/terms" className="underline hover:text-gray-700">利用規約</a>
+              {t.siteName}　<a href="/terms" className="underline hover:text-gray-700">{t.termsLabel}</a>
             </p>
           </div>
           <button
@@ -244,14 +254,14 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
             </svg>
             {/* 「予約確認」だけだとキャンセルできることが伝わらず、問い合わせの原因になっていた。
                 狭い画面では折り返さないよう2段階の表記にする */}
-            <span className="hidden sm:inline">予約確認・キャンセル</span>
-            <span className="sm:hidden">確認・取消</span>
+            <span className="hidden sm:inline">{t.myLong}</span>
+            <span className="sm:hidden">{t.myShort}</span>
           </button>
         </div>
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-4 pb-24">
-        <StepIndicator currentStep={step} />
+        <StepIndicator currentStep={step} lang={lang} />
 
         {/* ===== STEP 1 ===== */}
         {step === 1 && (
@@ -259,18 +269,19 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
             {/* 左カラム: 施設選択 + カレンダー */}
             <div className="space-y-5">
               <div>
-                <h2 className="text-sm font-semibold text-gray-600 mb-2">① 施設を選ぶ</h2>
+                <h2 className="text-sm font-semibold text-gray-600 mb-2">{t.s1Facility}</h2>
                 <FacilityTabs facilities={facilities} selected={selectedFacility} onChange={handleFacilityChange} />
               </div>
 
               <div>
-                <h2 className="text-sm font-semibold text-gray-600 mb-2">② 日付を選ぶ</h2>
+                <h2 className="text-sm font-semibold text-gray-600 mb-2">{t.s1Date}</h2>
                 <Calendar
                   selectedDate={selectedDate}
                   onDateSelect={handleDateSelect}
                   bookedDates={monthBookings}
                   currentMonth={currentMonth}
                   onMonthChange={setCurrentMonth}
+                  lang={lang}
                 />
               </div>
             </div>
@@ -279,28 +290,28 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
             <div className="space-y-5 mt-5 lg:mt-0">
               {selectedDate ? (
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-600 mb-1">③ 時間を選ぶ</h2>
+                  <h2 className="text-sm font-semibold text-gray-600 mb-1">{t.s1Time}</h2>
                   <p className="text-xs text-gray-400 mb-2">
-                    開始時刻をクリック → 終了時刻をクリック（例: 10:00 → 11:30 で 90分）
+                    {t.timeHint}
                   </p>
                   {pendingStart && selectedSlots.length === 0 && (
                     <div className="mb-3 px-3 py-2.5 bg-orange-50 rounded-lg border border-orange-100">
                       <p className="text-sm text-orange-700 font-semibold">
-                        開始: {pendingStart} — 終了時刻をクリックしてください
+                        {t.pendingMsg(pendingStart)}
                       </p>
                       <p className="text-xs text-orange-400 mt-0.5">
-                        同じ時刻をクリックするとキャンセルできます
+                        {t.pendingCancel}
                       </p>
                     </div>
                   )}
                   {selectedSlots.length > 0 && (
                     <div className="mb-3 px-3 py-2.5 bg-blue-50 rounded-lg border border-blue-100">
                       <p className="text-sm text-blue-700 font-semibold">
-                        選択中: {formatTimeRange(selectedSlots)}
-                        <span className="text-blue-500 font-normal ml-2">（{selectedSlots.length * 30}分）</span>
+                        {t.selecting}{fmtRange(selectedSlots)}
+                        <span className="text-blue-500 font-normal ml-2">{t.minutes(selectedSlots.length * 30)}</span>
                       </p>
                       <p className="text-xs text-blue-400 mt-0.5">
-                        再選択するには開始時間をクリックしてください
+                        {t.reselectHint}
                       </p>
                     </div>
                   )}
@@ -310,11 +321,12 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
                     onSlotClick={handleSlotClick}
                     pendingStart={pendingStart}
                     endTime={selectedSlots.length > 0 ? getEndTime(selectedSlots) : null}
+                    lang={lang}
                   />
                 </div>
               ) : (
                 <div className="hidden lg:flex items-center justify-center h-48 bg-white rounded-xl border border-gray-200 border-dashed text-gray-400 text-sm">
-                  ← 日付を選択すると時間が表示されます
+                  {t.selectDatePrompt}
                 </div>
               )}
 
@@ -326,7 +338,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
                     ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-sm'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
               >
-                次へ（内容確認）
+                {t.nextBtn}
               </button>
             </div>
           </div>
@@ -336,20 +348,20 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
         {step === 2 && (
           <div className="max-w-lg mx-auto space-y-4 mt-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <h2 className="text-base font-semibold text-gray-800 mb-3">予約内容の確認</h2>
+              <h2 className="text-base font-semibold text-gray-800 mb-3">{t.reviewTitle}</h2>
               <div>
                 <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
-                  <span className="text-sm text-gray-500">施設</span>
+                  <span className="text-sm text-gray-500">{t.facility}</span>
                   <span className="text-sm font-semibold text-gray-800">{selectedFacility.name}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5 border-b border-gray-100">
-                  <span className="text-sm text-gray-500">日付</span>
-                  <span className="text-sm font-semibold text-gray-800">{formatDateJP(selectedDate)}</span>
+                  <span className="text-sm text-gray-500">{t.date}</span>
+                  <span className="text-sm font-semibold text-gray-800">{fmtDate(selectedDate)}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5">
-                  <span className="text-sm text-gray-500">時間</span>
+                  <span className="text-sm text-gray-500">{t.time}</span>
                   <span className="text-sm font-semibold text-gray-800">
-                    {formatTimeRange(selectedSlots)}（{selectedSlots.length * 30}分）
+                    {fmtRange(selectedSlots)}{t.minutes(selectedSlots.length * 30)}
                   </span>
                 </div>
               </div>
@@ -358,24 +370,24 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  お名前 <span className="text-red-500">*</span>
+                  {t.nameLabel} <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="山田 太郎"
+                  placeholder={t.namePlaceholder}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                   autoFocus
                 />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  メールアドレス
-                  <span className="text-gray-400 font-normal text-xs ml-1">（任意）</span>
+                  {t.emailLabel}
+                  <span className="text-gray-400 font-normal text-xs ml-1">{t.optional}</span>
                 </label>
                 <p className="text-xs text-gray-400 mb-2">
-                  入力すると確認メールが届き、後から予約の確認・キャンセルができます
+                  {t.emailHint}
                 </p>
                 <input
                   type="email"
@@ -396,7 +408,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
                 onClick={() => setStep(1)}
                 className="w-1/3 py-4 rounded-xl font-semibold text-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
               >
-                戻る
+                {t.back}
               </button>
               <button
                 disabled={!name.trim() || submitting}
@@ -406,7 +418,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
                     ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
               >
-                {submitting ? '予約中...' : '予約を確定する'}
+                {submitting ? t.submitting : t.confirmBtn}
               </button>
             </div>
           </div>
@@ -422,20 +434,20 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h2 className="text-xl font-bold text-gray-800">予約完了！</h2>
-                <p className="text-sm text-gray-500 mt-1">ご予約を承りました</p>
+                <h2 className="text-xl font-bold text-gray-800">{t.doneTitle}</h2>
+                <p className="text-sm text-gray-500 mt-1">{t.doneSub}</p>
                 {email && (
-                  <p className="text-xs text-blue-500 mt-1">確認メールを {email} に送信しました</p>
+                  <p className="text-xs text-blue-500 mt-1">{t.doneMail(email)}</p>
                 )}
               </div>
 
               <div className="bg-blue-50 rounded-xl p-3 text-sm text-gray-700 space-y-1.5 border border-blue-100">
-                <p className="font-semibold text-blue-800 mb-1">予約内容</p>
-                <p>🏢 施設：{selectedFacility.name}</p>
-                <p>📅 日付：{formatDateJP(selectedDate)}</p>
-                <p>🕐 時間：{formatTimeRange(selectedSlots)}（{selectedSlots.length * 30}分）</p>
-                <p>👤 お名前：{name}</p>
-                {email && <p>✉ メール：{email}</p>}
+                <p className="font-semibold text-blue-800 mb-1">{t.doneBox}</p>
+                <p>🏢 {t.facility}{t.colon}{selectedFacility.name}</p>
+                <p>📅 {t.date}{t.colon}{fmtDate(selectedDate)}</p>
+                <p>🕐 {t.time}{t.colon}{fmtRange(selectedSlots)}{t.minutes(selectedSlots.length * 30)}</p>
+                <p>👤 {t.doneName}{t.colon}{name}</p>
+                {email && <p>✉ {t.doneEmail}{t.colon}{email}</p>}
               </div>
             </div>
 
@@ -443,13 +455,13 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member' }
               onClick={handleReset}
               className="w-full py-4 rounded-xl font-semibold text-base bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
             >
-              続けて予約する
+              {t.again}
             </button>
           </div>
         )}
       </div>
 
-      {showMyPage && <MyReservations initialEmail={myEmail} onClose={() => setShowMyPage(false)} />}
+      {showMyPage && <MyReservations initialEmail={myEmail} onClose={() => setShowMyPage(false)} lang={lang} />}
     </div>
   )
 }

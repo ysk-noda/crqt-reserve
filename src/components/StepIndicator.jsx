@@ -1,9 +1,11 @@
-const STEPS = ['施設・日時選択', '内容確認', '予約完了']
+import { STR } from '../lib/i18n'
 
-export default function StepIndicator({ currentStep }) {
+export default function StepIndicator({ currentStep, lang = 'ja' }) {
+  const steps = STR[lang].steps
+
   return (
     <div className="flex items-start justify-center py-2">
-      {STEPS.map((label, idx) => {
+      {steps.map((label, idx) => {
         const step = idx + 1
         const isActive = step === currentStep
         const isDone = step < currentStep
@@ -31,7 +33,7 @@ export default function StepIndicator({ currentStep }) {
                 {label}
               </span>
             </div>
-            {idx < STEPS.length - 1 && (
+            {idx < steps.length - 1 && (
               <div
                 className={`h-0.5 w-8 mt-3.5 mx-1 flex-shrink-0
                   ${isDone ? 'bg-green-400' : 'bg-gray-200'}

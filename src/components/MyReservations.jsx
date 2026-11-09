@@ -1,8 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { formatDateJP } from '../lib/utils'
+import { formatDateJP, FACILITY_NAME_JA } from '../lib/utils'
+import { STR, FACILITIES_EN, formatDateEN } from '../lib/i18n'
 
-export default function MyReservations({ onClose, initialEmail = '' }) {
+// 英語表示用: DBに入っている日本語施設名 → 英語名（対応が無ければそのまま出す）
+const EN_NAME_BY_JA = Object.fromEntries(
+  FACILITIES_EN.map((f) => [FACILITY_NAME_JA[f.id], f.name])
+)
+
+export default function MyReservations({ onClose, initialEmail = '', lang = 'ja' }) {
+  const t = STR[lang]
+  const fmtDate = lang === 'en' ? formatDateEN : formatDateJP
+  const dispName = (ja) => (lang === 'en' ? EN_NAME_BY_JA[ja] || ja : ja)
+
   const [email, setEmail] = useState(initialEmail)
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(false)
@@ -31,9 +41,7 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
   }
 
   async function handleCancel(booking) {
-    if (!window.confirm(
-      `以下の予約をキャンセルしますか？\n\n${booking.facility_name}\n${booking.date}  ${booking.start_time} 〜 ${booking.end_time}\n${booking.name} 様`
-    )) return
+    if (!window.confirm(t.confirmCancel({ ...booking, facility_name: dispName(booking.facility_name) }))) return
 
     setCancelingId(booking.id)
     // id＋メールの一致確認はサーバー側（cancel_booking）で行う
@@ -44,7 +52,7 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
     if (!error && ok) {
       setBookings((prev) => prev.filter((b) => b.id !== booking.id))
     } else {
-      alert('キャンセルに失敗しました。')
+      alert(t.cancelFailed)
     }
   }
 
@@ -55,7 +63,7 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
 
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-base font-bold text-gray-800">予約確認・キャンセル</h2>
+          <h2 className="text-base font-bold text-gray-800">{t.myTitle}</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-lg"
@@ -68,10 +76,10 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
           {/* メール入力 */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-              予約時に入力したメールアドレス
+              {t.myEmailLabel}
             </label>
             <p className="text-xs text-gray-400 mb-2">
-              メールアドレスを入力すると、ご自身の予約一覧が表示されます
+              {t.myEmailHint}
             </p>
             <div className="flex gap-2">
               <input
@@ -93,7 +101,7 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'}
                 `}
               >
-                {loading ? '検索中...' : '検索'}
+                {loading ? t.searching : t.search}
               </button>
             </div>
           </div>
@@ -104,24 +112,24 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
               {bookings.length === 0 ? (
                 <div className="text-center py-10 text-gray-400">
                   <p className="text-4xl mb-3">📭</p>
-                  <p className="text-sm">予約が見つかりませんでした</p>
+                  <p className="text-sm">{t.notFound}</p>
                   <p className="text-xs mt-1 text-gray-300">
-                    ※ 過去の予約・メール未入力の予約は表示されません
+                    {t.notFoundNote}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-gray-500 font-medium">
-                    {bookings.length}件の予約が見つかりました
+                    {t.found(bookings.length)}
                   </p>
                   {bookings.map((b) => (
                     <div key={b.id} className="bg-gray-50 rounded-xl p-3.5 border border-gray-200">
                       <div className="flex justify-between items-start gap-2">
                         <div className="space-y-1 flex-1 min-w-0">
-                          <p className="font-semibold text-gray-800 text-sm">{b.facility_name}</p>
-                          <p className="text-sm text-gray-600">{formatDateJP(b.date)}</p>
+                          <p className="font-semibold text-gray-800 text-sm">{dispName(b.facility_name)}</p>
+                          <p className="text-sm text-gray-600">{fmtDate(b.date)}</p>
                           <p className="text-sm text-gray-600">
-                            {b.start_time} 〜 {b.end_time}
+                            {b.start_time} {lang === 'en' ? '–' : '〜'} {b.end_time}
                           </p>
                         </div>
                         <button
@@ -134,7 +142,7 @@ export default function MyReservations({ onClose, initialEmail = '' }) {
                               : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 active:bg-red-200'}
                           `}
                         >
-                          {cancelingId === b.id ? '処理中...' : 'キャンセル'}
+                          {cancelingId === b.id ? t.canceling : t.cancel}
                         </button>
                       </div>
                     </div>

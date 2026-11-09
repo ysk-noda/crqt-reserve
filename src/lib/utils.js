@@ -6,6 +6,10 @@ export const FACILITIES = [
   { id: 'phoneboxC', name: 'フォンボックス（地下・奥）' },
 ]
 
+// 予約データ（facility_name）は表示言語によらず日本語の正式名で保存する
+// （管理画面・リマインドメールの表記を揃えるため。英語ページ /en からの予約もここで引く）
+export const FACILITY_NAME_JA = Object.fromEntries(FACILITIES.map((f) => [f.id, f.name]))
+
 // 09:00 〜 23:30 の30分単位スロット（30個、最終枠の終了は24:00）
 export const TIME_SLOTS = Array.from({ length: 30 }, (_, i) => {
   const total = 9 * 60 + i * 30

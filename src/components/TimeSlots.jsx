@@ -3,8 +3,10 @@
 // 例: 10:00クリック → 11:00クリック → 10:00〜11:00（60分）
 
 import { TIME_SLOTS } from '../lib/utils'
+import { STR } from '../lib/i18n'
 
-export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendingStart, endTime }) {
+export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendingStart, endTime, lang = 'ja' }) {
+  const t = STR[lang]
   function isBooked(timeStr) {
     return bookings.some((b) => timeStr >= b.start_time && timeStr < b.end_time)
   }
@@ -43,7 +45,7 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
   })
   const hours = Object.entries(hourMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([h, slots]) => ({ label: `${h}時`, slots }))
+    .map(([h, slots]) => ({ label: t.hourLabel(h), slots }))
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -74,7 +76,7 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
         {/* 24:00 終了時刻ボタン（最終枠の終了用） */}
         <div className="flex">
           <div className="w-12 flex-shrink-0 flex items-center justify-center text-xs text-gray-400 bg-gray-50 border-r border-gray-100">
-            24時
+            {t.hour24}
           </div>
           <div className="flex flex-1">
             <button
@@ -91,19 +93,19 @@ export default function TimeSlots({ bookings, selectedSlots, onSlotClick, pendin
         <p className="text-xs text-gray-400 flex items-center gap-3 flex-wrap">
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-red-50 border border-red-200 rounded align-middle" />
-            埋まっています
+            {t.legendBooked}
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-orange-400 rounded align-middle" />
-            開始時刻
+            {t.legendStart}
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-blue-600 rounded align-middle" />
-            選択中
+            {t.legendSelected}
           </span>
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 bg-blue-200 rounded align-middle" />
-            終了時刻
+            {t.legendEnd}
           </span>
         </p>
       </div>

@@ -1,8 +1,8 @@
 import { formatDate } from '../lib/utils'
+import { STR } from '../lib/i18n'
 
-const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
-
-export default function Calendar({ selectedDate, onDateSelect, bookedDates, currentMonth, onMonthChange }) {
+export default function Calendar({ selectedDate, onDateSelect, bookedDates, currentMonth, onMonthChange, lang = 'ja' }) {
+  const DOW_LABELS = STR[lang].dows
   const today = formatDate(new Date())
   const year = currentMonth.getFullYear()
   const month = currentMonth.getMonth()
@@ -36,7 +36,7 @@ export default function Calendar({ selectedDate, onDateSelect, bookedDates, curr
           ‹
         </button>
         <span className="font-semibold text-gray-800">
-          {year}年{month + 1}月
+          {STR[lang].monthLabel(year, month + 1)}
         </span>
         <button
           onClick={nextMonth}
