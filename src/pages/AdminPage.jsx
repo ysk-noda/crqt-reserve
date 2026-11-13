@@ -13,6 +13,27 @@ function getWeekRange() {
   return { start: formatDate(monday), end: formatDate(sunday) }
 }
 
+// 表示用の短い施設名（利用状況タブで使う）
+const FACILITY_SHORT = {
+  meeting1: '会議室 地下',
+  meeting2: '会議室 2階',
+  phoneboxA: 'フォン 入口',
+  phoneboxB: 'フォン 地下手前',
+  phoneboxC: 'フォン 地下奥',
+}
+
+// "HH:MM" → 分
+function toMin(t) {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+// 分 → "62.5" / "40"（.0は出さない）
+function fmtH(min) {
+  const h = Math.round((min / 60) * 10) / 10
+  return Number.isInteger(h) ? String(h) : h.toFixed(1)
+}
+
 // 管理操作はすべて Edge Function（admin-bookings）経由。
 // 以前はパスワードをフロントに埋め込み、anonキーで直接DBを触っていたが、
 // パスワード照合・全件取得・削除をサーバー側に移した（2026-10-28）。
@@ -28,6 +49,173 @@ async function adminApi(password, body) {
   return { status: res.status, ...json }
 }
 
+// 利用状況タブ：月ごとに「どの設備が混んでいるか」「誰がどれだけ使っているか」を見る
+function UsageStats({ bookings }) {
+  const now = new Date()
+  const [month, setMonth] = useState(
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  )
+  const [expandedKey, setExpandedKey] = useState(null)
+  const [showAll, setShowAll] = useState(false)
+
+  function shiftMonth(diff) {
+    const [y, m] = month.split('-').map(Number)
+    const d = new Date(y, m - 1 + diff, 1)
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    setExpandedKey(null)
+    setShowAll(false)
+  }
+
+  const stats = useMemo(() => {
+    const sel = bookings.filter((b) => b.date.startsWith(month))
+    const fac = {}
+    FACILITIES.forEach((f) => { fac[f.id] = { cnt: 0, min: 0 } })
+    // 名寄せ：メールがあればメール、なければ空白を除いた名前
+    const ppl = new Map()
+    let totalMin = 0
+    sel.forEach((b) => {
+      const min = toMin(b.end_time) - toMin(b.start_time)
+      totalMin += min
+      if (fac[b.facility_id]) { fac[b.facility_id].cnt++; fac[b.facility_id].min += min }
+      const key = (b.email || '').toLowerCase() || 'n:' + (b.name || '').replace(/[\s　]/g, '')
+      let p = ppl.get(key)
+      if (!p) { p = { key, name: b.name, email: b.email || '', cnt: 0, min: 0, fac: {} }; ppl.set(key, p) }
+      p.cnt++; p.min += min
+      if (!p.fac[b.facility_id]) p.fac[b.facility_id] = { cnt: 0, min: 0 }
+      p.fac[b.facility_id].cnt++; p.fac[b.facility_id].min += min
+    })
+    const people = [...ppl.values()].sort((a, b) => b.min - a.min)
+    // 稼働率の分母：営業時間 9:00〜24:00（15時間）× 月の日数
+    const [y, m] = month.split('-').map(Number)
+    const capacity = new Date(y, m, 0).getDate() * 15 * 60
+    return { total: sel.length, totalMin, people, fac, capacity }
+  }, [bookings, month])
+
+  const maxPersonMin = stats.people.length ? stats.people[0].min : 1
+  const shownPeople = showAll ? stats.people : stats.people.slice(0, 10)
+  const monthLabel = (() => { const [y, m] = month.split('-').map(Number); return `${y}年${m}月` })()
+
+  return (
+    <div>
+      {/* 月切替＋合計 */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4 flex flex-wrap items-center gap-3">
+        <div className="inline-flex items-center rounded-lg border border-gray-300 overflow-hidden">
+          <button onClick={() => shiftMonth(-1)} className="px-3 py-2 text-sm text-gray-500 hover:bg-gray-50">‹ 前月</button>
+          <span className="px-4 py-2 text-sm font-semibold text-gray-800 border-x border-gray-300 bg-gray-50">{monthLabel}</span>
+          <button onClick={() => shiftMonth(1)} className="px-3 py-2 text-sm text-gray-500 hover:bg-gray-50">翌月 ›</button>
+        </div>
+        <span className="ml-auto text-sm text-gray-500">
+          {stats.total}件 / {fmtH(stats.totalMin)}時間 / 利用者{stats.people.length}人
+        </span>
+      </div>
+
+      {stats.total === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 py-16 text-center text-gray-400">
+          <p className="text-4xl mb-3">📊</p>
+          <p>{monthLabel}の予約はありません</p>
+        </div>
+      ) : (
+        <>
+          {/* 設備ごとの稼働 */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+            {FACILITIES.map((f) => {
+              const v = stats.fac[f.id]
+              const pct = Math.round((v.min / stats.capacity) * 100)
+              return (
+                <div key={f.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-3">
+                  <p className="text-xs text-gray-500">{FACILITY_SHORT[f.id]}</p>
+                  <p className="text-xl font-semibold text-gray-800 mt-0.5">
+                    {fmtH(v.min)}<span className="text-xs font-normal text-gray-500">h・{v.cnt}件</span>
+                  </p>
+                  <div className="h-2 bg-blue-50 rounded-full mt-2">
+                    <div className="h-2 bg-blue-500 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">営業時間の{pct}%</p>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 利用者ランキング */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">利用者</th>
+                    <th className="text-right px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">件数</th>
+                    <th className="text-right px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">時間</th>
+                    <th className="px-4 py-3 w-1/3"></th>
+                    <th className="text-left px-4 py-3 text-gray-600 font-semibold whitespace-nowrap">よく使う設備</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownPeople.map((p) => {
+                    const topFac = Object.entries(p.fac).sort((a, b) => b[1].cnt - a[1].cnt).slice(0, 2)
+                    const expanded = expandedKey === p.key
+                    return (
+                      <FragmentRow key={p.key}>
+                        <tr
+                          onClick={() => setExpandedKey(expanded ? null : p.key)}
+                          className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <td className="px-4 py-2.5 text-gray-800 whitespace-nowrap">
+                            <span className="inline-block w-3 text-gray-400 text-xs">{expanded ? '▼' : '▶'}</span>
+                            {p.name}
+                            {p.email
+                              ? <span className="ml-1.5 text-xs text-gray-400">{p.email}</span>
+                              : <span className="ml-1.5 text-xs text-gray-400 border border-gray-200 rounded px-1">メールなし</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-gray-800">{p.cnt}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-gray-800 whitespace-nowrap">{fmtH(p.min)}h</td>
+                          <td className="px-4 py-2.5">
+                            <div className="h-2.5 bg-blue-500 rounded" style={{ width: `${Math.max(Math.round((p.min / maxPersonMin) * 100), 2)}%` }} />
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap text-xs">
+                            {topFac.map(([fid, v]) => `${FACILITY_SHORT[fid]} ${v.cnt}`).join('・')}
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="border-b border-gray-100 bg-blue-50/50">
+                            <td colSpan={5} className="px-4 py-2.5">
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                {FACILITIES.filter((f) => p.fac[f.id]).map((f) => (
+                                  <span key={f.id} className="bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-gray-700">
+                                    {FACILITY_SHORT[f.id]}：{p.fac[f.id].cnt}件・{fmtH(p.fac[f.id].min)}h
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </FragmentRow>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {stats.people.length > 10 && (
+              <div className="px-4 py-3 border-t border-gray-100 text-center">
+                <button onClick={() => setShowAll(!showAll)} className="text-sm text-blue-600 hover:text-blue-800">
+                  {showAll ? '上位10人だけ表示' : `ほか${stats.people.length - 10}人を表示`}
+                </button>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-3">
+            ※ 予約ベースの集計です（実際の利用とは異なる場合があります）。メール未入力の予約は名前だけで束ねているため、同姓の別人・表記ゆれで分かれることがあります。
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
+// tbody直下に複数行を返すためのフラグメント
+function FragmentRow({ children }) {
+  return <>{children}</>
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState(() => sessionStorage.getItem('admin_pw') || '')
   const [authed, setAuthed] = useState(false)
@@ -36,6 +224,7 @@ export default function AdminPage() {
 
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(false)
+  const [view, setView] = useState('list') // 'list' = 予約一覧 / 'stats' = 利用状況
   const [filterFacility, setFilterFacility] = useState('')
   const [filterDate, setFilterDate] = useState('')
   const [period, setPeriod] = useState('week') // 'week' = 今週 / 'all' = 全期間
@@ -196,6 +385,25 @@ export default function AdminPage() {
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* タブ：予約一覧 / 利用状況 */}
+        <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden mb-4 bg-white">
+          {[
+            { key: 'list', label: '予約一覧' },
+            { key: 'stats', label: '利用状況' },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setView(t.key)}
+              className={`px-4 py-2 text-sm transition-colors ${view === t.key ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {view === 'stats' && <UsageStats bookings={bookings} />}
+
+        {view === 'list' && <>
         {/* フィルター */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -350,6 +558,7 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+        </>}
       </div>
     </div>
   )
