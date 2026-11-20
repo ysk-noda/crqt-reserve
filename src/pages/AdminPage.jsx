@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { FACILITIES, formatDate } from '../lib/utils'
+import TodayBoard from '../components/TodayBoard'
 
 // 今週（月曜〜日曜）の日付範囲を返す
 function getWeekRange() {
@@ -224,7 +225,8 @@ export default function AdminPage() {
 
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(false)
-  const [view, setView] = useState('list') // 'list' = 予約一覧 / 'stats' = 利用状況
+  const [view, setView] = useState('list') // 'list' = 予約一覧 / 'today' = 今日の状況 / 'stats' = 利用状況
+  const [fetchedAt, setFetchedAt] = useState('')
   const [filterFacility, setFilterFacility] = useState('')
   const [filterDate, setFilterDate] = useState('')
   const [period, setPeriod] = useState('week') // 'week' = 今週 / 'all' = 全期間
@@ -273,12 +275,23 @@ export default function AdminPage() {
     setBookings([])
   }
 
-  async function fetchBookings() {
-    setLoading(true)
+  // 「今日の状況」を開いている間は1分ごとに予約を取り直す（突発利用の確認に使うため、古い表示を残さない）
+  useEffect(() => {
+    if (!authed || view !== 'today') return
+    fetchBookings(true)
+    const t = setInterval(() => fetchBookings(true), 60 * 1000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, view])
+
+  async function fetchBookings(quiet) {
+    if (!quiet) setLoading(true)
     const r = await adminApi(password, { action: 'list' })
     setLoading(false)
     if (r.status === 200) {
       setBookings(r.bookings || [])
+      const d = new Date()
+      setFetchedAt(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)
     } else if (r.status === 401) {
       handleLogout()
     }
@@ -389,6 +402,7 @@ export default function AdminPage() {
         <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden mb-4 bg-white">
           {[
             { key: 'list', label: '予約一覧' },
+            { key: 'today', label: '今日の状況' },
             { key: 'stats', label: '利用状況' },
           ].map((t) => (
             <button
@@ -402,6 +416,14 @@ export default function AdminPage() {
         </div>
 
         {view === 'stats' && <UsageStats bookings={bookings} />}
+
+        {view === 'today' && (
+          <TodayBoard
+            bookings={bookings.filter((b) => b.date === formatDate(new Date()))}
+            showNames
+            updatedAt={fetchedAt}
+          />
+        )}
 
         {view === 'list' && <>
         {/* フィルター */}
@@ -485,7 +507,7 @@ export default function AdminPage() {
                 {loading ? '読み込み中...' : `${shownBookings.length}件`}
               </span>
               <button
-                onClick={fetchBookings}
+                onClick={() => fetchBookings()}
                 className="px-3 py-2 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
               >
                 更新
