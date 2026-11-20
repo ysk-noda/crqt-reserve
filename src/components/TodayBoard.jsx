@@ -13,7 +13,8 @@ const hhmm  = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${Strin
 const after = (min) => (min >= 60 ? `${Math.floor(min / 60)}時間${min % 60 ? (min % 60) + '分' : ''}` : `${min}分`)
 
 // compact=true：設備ごとの「今の状況」1行だけを出す（予約画面の上に常に出す用。時間割の帯は出さない）
-export default function TodayBoard({ bookings, showNames = false, updatedAt, facilities = FACILITIES, compact = false }) {
+// onRelease を渡したときだけ（管理画面）、予約ごとに「解放／取り消し」ボタンを出す
+export default function TodayBoard({ bookings, showNames = false, updatedAt, facilities = FACILITIES, compact = false, onRelease, releasingId }) {
   // 1分ごとに「今」を進める（データの取り直しは親が行う）
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -84,7 +85,37 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt, fac
                 {!closed && <div className="absolute top-0 bottom-0 w-0.5 bg-orange-500" style={{ left: pct(nowMin) }} />}
               </div>
               {/* 短い予約は帯の中で文字が切れるので、開始〜終了を文字でも並べる */}
-              {list.length > 0 && (
+              {/* 管理画面だけ：予約ごとに「解放」ボタン（早く終わったのに予約が残り、次の人が使えないのを防ぐ） */}
+              {list.length > 0 && onRelease && (
+                <div className="mt-1.5 space-y-1">
+                  {list.map((b, i) => {
+                    const ended = b.e <= nowMin
+                    const inUse = b.s <= nowMin && nowMin < b.e
+                    return (
+                      <div key={b.id || i} className="flex items-center gap-2 text-xs">
+                        <span className={`whitespace-nowrap ${ended ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                          {b.start_time}〜{b.end_time}{showNames && b.name ? `（${b.name}）` : ''}
+                        </span>
+                        {!ended && (
+                          <button
+                            onClick={() => onRelease(b)}
+                            disabled={releasingId === b.id}
+                            className={`ml-auto shrink-0 px-2.5 py-1 rounded-md border whitespace-nowrap
+                              ${releasingId === b.id
+                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : inUse
+                                  ? 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
+                                  : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'}`}
+                          >
+                            {releasingId === b.id ? '処理中...' : inUse ? '解放（ここで終了）' : '取り消し'}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {list.length > 0 && !onRelease && (
                 <p className="mt-1 text-xs leading-5">
                   {list.map((b, i) => (
                     <span key={i} className={`mr-3 whitespace-nowrap ${b.e <= nowMin ? 'text-gray-400 line-through' : 'text-gray-700'}`}>

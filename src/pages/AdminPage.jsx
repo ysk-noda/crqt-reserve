@@ -311,6 +311,35 @@ export default function AdminPage() {
     }
   }
 
+  // 今日の状況タブの「解放」：使用中なら終了時刻を今の30分枠の始まりに縮め、まだ始まっていなければ取り消す。
+  // 判定と時刻計算はサーバー（admin-bookings の release）が日本時間で行う
+  async function handleRelease(booking) {
+    const now = new Date()
+    const nowHM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const inUse = booking.start_time <= nowHM && nowHM < booking.end_time
+    const msg = inUse
+      ? `この予約を「ここで終了」にして、空けますか？\n\n${booking.facility_name}\n${booking.start_time}〜${booking.end_time}\n${booking.name} 様\n\n終了時刻が今の30分枠の始まりに変わり、そこから次の人が予約できるようになります。\n（始まって30分以内なら予約ごと消えます）`
+      : `この予約を取り消しますか？\n\n${booking.facility_name}\n${booking.start_time}〜${booking.end_time}\n${booking.name} 様`
+    if (!window.confirm(msg)) return
+
+    setCancelingId(booking.id)
+    const r = await adminApi(password, { action: 'release', id: booking.id })
+    setCancelingId(null)
+
+    if (r.status === 200 && r.result === 'deleted') {
+      setBookings((prev) => prev.filter((b) => b.id !== booking.id))
+    } else if (r.status === 200 && r.result === 'shortened') {
+      setBookings((prev) => prev.map((b) => (b.id === booking.id ? { ...b, end_time: r.end_time } : b)))
+    } else if (r.status === 409) {
+      alert('この予約はもう終わっています。')
+      fetchBookings(true)
+    } else if (r.status === 401) {
+      handleLogout()
+    } else {
+      alert('解放に失敗しました。')
+    }
+  }
+
   // 絞り込みはブラウザ内で行う（全件はログイン時・更新時にまとめて取得済み）
   const shownBookings = useMemo(() => {
     let list = bookings
@@ -422,6 +451,8 @@ export default function AdminPage() {
             bookings={bookings.filter((b) => b.date === formatDate(new Date()))}
             showNames
             updatedAt={fetchedAt}
+            onRelease={handleRelease}
+            releasingId={cancelingId}
           />
         )}
 

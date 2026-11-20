@@ -41,3 +41,8 @@ verify_jwt = false
 
 [functions.extend-booking]
 verify_jwt = false
+
+# 管理画面はログイン鍵（JWT）を送らずパスワードで照合するため false 必須。
+# true のままデプロイすると管理画面が全部401になる（2026-11-20 追記）
+[functions.admin-bookings]
+verify_jwt = false
