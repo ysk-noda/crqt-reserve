@@ -68,11 +68,21 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt }) {
                     style={{ left: pct(b.s), width: `calc(${pct(b.e)} - ${pct(b.s)})` }}
                     title={`${b.start_time}〜${b.end_time}${showNames && b.name ? ' ' + b.name : ''}`}
                   >
-                    {b.start_time}{showNames && b.name ? ' ' + b.name : ''}
+                    {b.start_time}〜{b.end_time}{showNames && b.name ? ' ' + b.name : ''}
                   </div>
                 ))}
                 {!closed && <div className="absolute top-0 bottom-0 w-0.5 bg-orange-500" style={{ left: pct(nowMin) }} />}
               </div>
+              {/* 短い予約は帯の中で文字が切れるので、開始〜終了を文字でも並べる */}
+              {list.length > 0 && (
+                <p className="mt-1 text-xs leading-5">
+                  {list.map((b, i) => (
+                    <span key={i} className={`mr-3 whitespace-nowrap ${b.e <= nowMin ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                      {b.start_time}〜{b.end_time}{showNames && b.name ? `（${b.name}）` : ''}
+                    </span>
+                  ))}
+                </p>
+              )}
             </div>
           )
         })}
