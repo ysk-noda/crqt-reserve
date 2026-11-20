@@ -243,6 +243,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member', 
             </div>
             <p className="text-xs text-gray-500">
               {t.siteName}　<a href="/terms" className="underline hover:text-gray-700">{t.termsLabel}</a>
+              {lang === 'ja' && <>　<a href="/today" className="underline text-blue-600 hover:text-blue-800">今日の空き状況</a></>}
             </p>
           </div>
           <button

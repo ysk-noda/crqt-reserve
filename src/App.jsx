@@ -4,6 +4,7 @@ import AdminPage from './pages/AdminPage'
 import ExtendResultPage from './pages/ExtendResultPage'
 import TermsPage from './pages/TermsPage'
 import WelcomePage from './pages/WelcomePage'
+import TodayPage from './pages/TodayPage'
 import { FACILITIES } from './lib/utils'
 import { FACILITIES_EN } from './lib/i18n'
 
@@ -18,6 +19,8 @@ export default function App() {
         <Route path="/drop-in" element={<BookingPage facilities={DROPIN_FACILITIES} mode="dropin" />} />
         {/* 英語ページ（2026-11-09 デジタルノマド受け入れ用）。フォンボックスのみ・予約データは共通 */}
         <Route path="/en" element={<BookingPage facilities={FACILITIES_EN} mode="nomad" lang="en" />} />
+        {/* 利用者向け：今日の空き状況（予約者名・メールは出さない。2026-11-20） */}
+        <Route path="/today" element={<TodayPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/extend-result" element={<ExtendResultPage />} />
         <Route path="/terms" element={<TermsPage />} />
