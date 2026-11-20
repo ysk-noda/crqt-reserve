@@ -100,7 +100,7 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt, fac
                           <button
                             onClick={() => onRelease(b)}
                             disabled={releasingId === b.id}
-                            className={`ml-auto shrink-0 px-2.5 py-1 rounded-md border whitespace-nowrap
+                            className={`ml-1 shrink-0 px-2.5 py-1 rounded-md border whitespace-nowrap
                               ${releasingId === b.id
                                 ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                                 : inUse
