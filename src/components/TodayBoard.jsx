@@ -12,7 +12,8 @@ const toMin = (t) => { const [h, m] = String(t).split(':').map(Number); return h
 const hhmm  = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 const after = (min) => (min >= 60 ? `${Math.floor(min / 60)}時間${min % 60 ? (min % 60) + '分' : ''}` : `${min}分`)
 
-export default function TodayBoard({ bookings, showNames = false, updatedAt }) {
+// compact=true：設備ごとの「今の状況」1行だけを出す（予約画面の上に常に出す用。時間割の帯は出さない）
+export default function TodayBoard({ bookings, showNames = false, updatedAt, facilities = FACILITIES, compact = false }) {
   // 1分ごとに「今」を進める（データの取り直しは親が行う）
   const [now, setNow] = useState(() => new Date())
   useEffect(() => {
@@ -24,17 +25,17 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt }) {
   const hours = Array.from({ length: (CLOSE_MIN - OPEN_MIN) / 60 + 1 }, (_, i) => OPEN_MIN / 60 + i)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-      <div className="flex items-baseline justify-between mb-3">
-        <p className="text-sm font-semibold text-gray-700">
-          今日 {now.getMonth() + 1}/{now.getDate()}（{'日月火水木金土'[now.getDay()]}）の状況
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 ${compact ? 'px-3 py-2.5' : 'p-4'}`}>
+      <div className={`flex items-baseline justify-between ${compact ? 'mb-1.5' : 'mb-3'}`}>
+        <p className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-700`}>
+          今日 {now.getMonth() + 1}/{now.getDate()}（{'日月火水木金土'[now.getDay()]}）の{compact ? '空き' : '状況'}
           <span className="ml-2 text-gray-400 font-normal">いま {hhmm(nowMin)}</span>
         </p>
-        {updatedAt && <span className="text-xs text-gray-400">予約データ {updatedAt} 時点（1分ごとに更新）</span>}
+        {updatedAt && !compact && <span className="text-xs text-gray-400">予約データ {updatedAt} 時点（1分ごとに更新）</span>}
       </div>
 
-      <div className="space-y-4">
-        {FACILITIES.map((f) => {
+      <div className={compact ? 'space-y-1.5' : 'space-y-4'}>
+        {facilities.map((f) => {
           const list = bookings
             .filter((b) => b.facility_id === f.id)
             .map((b) => ({ ...b, s: toMin(b.start_time), e: toMin(b.end_time) }))
@@ -43,18 +44,27 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt }) {
           const next = list.find((b) => b.s > nowMin)
           const closed = nowMin < OPEN_MIN || nowMin >= CLOSE_MIN
 
-          let status, cls
-          if (closed)      { status = '予約受付時間外（9:00〜24:00）'; cls = 'bg-gray-100 text-gray-500' }
-          else if (cur)    { status = `使用中 〜${cur.end_time}まで` + (showNames && cur.name ? `（${cur.name}）` : ''); cls = 'bg-red-50 text-red-700 border border-red-200' }
-          else if (next)   { status = `空き（次の予約 ${next.start_time}〜・あと${after(next.s - nowMin)}）`; cls = 'bg-green-50 text-green-700 border border-green-200' }
-          else             { status = '空き（今日はこの後の予約なし）'; cls = 'bg-green-50 text-green-700 border border-green-200' }
+          let status, cls, short
+          if (closed)      { status = '予約受付時間外（9:00〜24:00）'; short = '受付時間外'; cls = 'bg-gray-100 text-gray-500' }
+          else if (cur)    { status = `使用中 〜${cur.end_time}まで` + (showNames && cur.name ? `（${cur.name}）` : ''); short = `使用中 〜${cur.end_time}`; cls = 'bg-red-50 text-red-700 border border-red-200' }
+          else if (next)   { status = `空き（次の予約 ${next.start_time}〜・あと${after(next.s - nowMin)}）`; short = `空き（次 ${next.start_time}〜）`; cls = 'bg-green-50 text-green-700 border border-green-200' }
+          else             { status = '空き（今日はこの後の予約なし）'; short = '空き'; cls = 'bg-green-50 text-green-700 border border-green-200' }
+
+          // 予約画面の上に出す簡易版：1設備1行・短い表記（スマホで予約フォームを押し下げないように）
+          if (compact) return (
+            <div key={f.id} className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-gray-700 truncate">{f.name}</span>
+              <span className={`shrink-0 px-2 py-0.5 rounded-md text-xs font-semibold ${cls}`}>{short}</span>
+            </div>
+          )
 
           return (
             <div key={f.id}>
-              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <div className={`flex flex-wrap items-center gap-2 ${compact ? '' : 'mb-1.5'}`}>
                 <span className="w-40 text-sm font-semibold text-gray-800">{f.name}</span>
                 <span className={`px-2.5 py-1 rounded-lg text-sm font-semibold ${cls}`}>{status}</span>
               </div>
+              {!compact && <>
               {/* 時間割の帯 */}
               <div className="relative h-7 bg-gray-50 rounded border border-gray-200 overflow-hidden">
                 {hours.slice(1, -1).map((h) => (
@@ -83,11 +93,13 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt }) {
                   ))}
                 </p>
               )}
+              </>}
             </div>
           )
         })}
       </div>
 
+      {!compact && <>
       {/* 時刻の目盛り */}
       <div className="relative h-4 mt-1 ml-0 text-[10px] text-gray-400">
         {hours.filter((h) => h % 3 === 0).map((h) => (
@@ -97,6 +109,7 @@ export default function TodayBoard({ bookings, showNames = false, updatedAt }) {
       <p className="text-xs text-gray-400 mt-3">
         青＝これからの予約／灰色＝終わった予約／オレンジの線＝いま。予約なしで使う場合は、次の予約の開始時刻までに空けてください。
       </p>
+      </>}
     </div>
   )
 }

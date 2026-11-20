@@ -15,6 +15,7 @@ import Calendar from '../components/Calendar'
 import TimeSlots from '../components/TimeSlots'
 import StepIndicator from '../components/StepIndicator'
 import MyReservations from '../components/MyReservations'
+import TodayBoard from '../components/TodayBoard'
 
 export default function BookingPage({ facilities = FACILITIES, mode = 'member', lang = 'ja' }) {
   const t = STR[lang]
@@ -47,6 +48,29 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member', 
   const initialMy = new URLSearchParams(window.location.search)
   const [showMyPage, setShowMyPage] = useState(initialMy.get('my') === '1')
   const [myEmail]  = useState(initialMy.get('email') || '')
+
+  // 今日の空き状況（予約画面の上に出す。予約者名・メールは読まない＝設備・開始・終了の3列だけ）
+  const [todayBookings, setTodayBookings] = useState([])
+  const [todayAt, setTodayAt] = useState('')
+  const [showTimeline, setShowTimeline] = useState(false)
+  async function fetchToday() {
+    const { data } = await supabase
+      .from('bookings')
+      .select('facility_id, start_time, end_time')
+      .eq('date', formatDate(new Date()))
+    if (data) {
+      setTodayBookings(data)
+      const d = new Date()
+      setTodayAt(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)
+    }
+  }
+  useEffect(() => {
+    if (lang !== 'ja') return
+    fetchToday()
+    const t = setInterval(fetchToday, 60 * 1000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     fetchMonthBookings()
@@ -223,6 +247,7 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member', 
     setEmail('')
     setSubmitError(null)
     fetchMonthBookings()
+    if (lang === 'ja') fetchToday()
   }
 
   const canProceedToStep2 = selectedDate && selectedSlots.length > 0 && !pendingStart
@@ -243,7 +268,6 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member', 
             </div>
             <p className="text-xs text-gray-500">
               {t.siteName}　<a href="/terms" className="underline hover:text-gray-700">{t.termsLabel}</a>
-              {lang === 'ja' && <>　<a href="/today" className="underline text-blue-600 hover:text-blue-800">今日の空き状況</a></>}
             </p>
           </div>
           <button
@@ -263,6 +287,24 @@ export default function BookingPage({ facilities = FACILITIES, mode = 'member', 
 
       <div className="max-w-6xl mx-auto px-4 py-4 pb-24">
         <StepIndicator currentStep={step} lang={lang} />
+
+        {/* ===== 今日の空き状況（突発利用の確認用。予約者名は出さない）===== */}
+        {step === 1 && lang === 'ja' && (
+          <div className="mt-3">
+            <TodayBoard
+              bookings={todayBookings}
+              facilities={facilities}
+              updatedAt={todayAt}
+              compact={!showTimeline}
+            />
+            <button
+              onClick={() => setShowTimeline(!showTimeline)}
+              className="mt-1.5 text-xs text-blue-600 hover:text-blue-800 underline"
+            >
+              {showTimeline ? '時間割を閉じる' : '今日の時間割を見る（何時から何時まで埋まっているか）'}
+            </button>
+          </div>
+        )}
 
         {/* ===== STEP 1 ===== */}
         {step === 1 && (
